@@ -8,7 +8,7 @@
 * [github.com/kwikteam/npy-matlab](https://github.com/kwikteam/npy-matlab)
 
 ## Description
-* Fit tuning curves for retinal boutons and SC neurons recorded with 2P imaging: \scripts\main_fitTuningCurves_2p.m
+See the Wiki
 
 ## Acknowledgments
 Some functions, particularly those for fitting the tuning curves, were written by Matteo Carandini and other members of the lab. Details in the comments of those functions.
