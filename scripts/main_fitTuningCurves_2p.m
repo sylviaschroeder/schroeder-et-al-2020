@@ -69,13 +69,13 @@ for iPars = length(parameterSets):-1:1 % results from parameterSets
             delays = readNPY(fullfile(folder, '_ss_2pPlanes.delay.npy'));
             planes = readNPY(fullfile(folder, '_ss_2pRois._ss_2pPlanes.npy'));
             kernels = readNPY(fullfile(folder, '_ss_2pRois._ss_gratingsKernels.npy'));
-            amplitudes = readNPY(fullfile(folder, '_ss_2pRois.gratingsDff.npy'));
             isGad = readNPY(fullfile(folder, '_ss_2pRois.isGad.npy'));
             pupilSize = readNPY(fullfile(folder, 'eye.diameter.npy'));
             pupilTime = readNPY(fullfile(folder, 'eye.timestamps.npy'));
             stimIntervals = readNPY(fullfile(folder, '_ss_grating.intervals.npy'));
             stimSequence = readNPY(fullfile(folder, '_ss_grating._ss_gratingID.npy'));
             directions = readNPY(fullfile(folder, '_ss_gratingID.directions.npy'));
+            amplitudes = readNPY(fullfile(folder, '_ss_gratingTrials.amplitudes.npy'));
             blanks = isnan(directions);
             directions(blanks) = [];
             timeBin = median(diff(time));
@@ -108,7 +108,7 @@ for iPars = length(parameterSets):-1:1 % results from parameterSets
             nonVisualNoBlanks(blanks,:) = [];
             
             largePupil = pupilSize == 2;
-            writeNPY(largePupil, fullfile(fResults, '_ss_gratingID.largePupil.npy'))
+            writeNPY(largePupil, fullfile(fResults, '_ss_gratingTrials.largePupil.npy'))
             
             fprintf('  Cell (of %d):', length(isGad));
             for iCell = 1:length(isGad)
@@ -181,12 +181,12 @@ for iPars = length(parameterSets):-1:1 % results from parameterSets
                 curves_smallPupil(iCell,:) = curves(:,1);
                 curves_largePupil(iCell,:) = curves(:,2);
             end
-            writeNPY(isSuppressed, fullfile(fResults, '_ss_2pRois.isSuppressed.npy'))
-            writeNPY(crossValExplVar, fullfile(fResults, '_ss_2pRois.tuningExplVar.npy'))
-            writeNPY(pars_smallPupil, fullfile(fResults, '_ss_2pRois.tuningParametersSmall.npy'))
-            writeNPY(pars_largePupil, fullfile(fResults, '_ss_2pRois.tuningParametersLarge.npy'))
-            writeNPY(curves_smallPupil, fullfile(fResults, '_ss_2pRois.tuningCurvesSmall.npy'))
-            writeNPY(curves_largePupil, fullfile(fResults, '_ss_2pRois.tuningCurvesLarge.npy'))
+            writeNPY(isSuppressed, fullfile(fResults, '_ss_tuning.isSuppressed.npy'))
+            writeNPY(crossValExplVar, fullfile(fResults, '_ss_tuning.explVar.npy'))
+            writeNPY(pars_smallPupil, fullfile(fResults, '_ss_tuning.parametersSmall.npy'))
+            writeNPY(pars_largePupil, fullfile(fResults, '_ss_tuning.parametersLarge.npy'))
+            writeNPY(curves_smallPupil, fullfile(fResults, '_ss_tuning.curvesSmall.npy'))
+            writeNPY(curves_largePupil, fullfile(fResults, '_ss_tuning.curvesLarge.npy'))
             fprintf('\n')
         end
     end

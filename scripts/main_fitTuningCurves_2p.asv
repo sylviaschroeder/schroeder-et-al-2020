@@ -108,7 +108,7 @@ for iPars = length(parameterSets):-1:1 % results from parameterSets
             nonVisualNoBlanks(blanks,:) = [];
             
             largePupil = pupilSize == 2;
-            writeNPY(largePupil, fullfile(fResults, '_ss_gratingID.largePupil.npy'))
+            writeNPY(largePupil, fullfile(fResults, '_ss_gratingTrials.largePupil.npy'))
             
             fprintf('  Cell (of %d):', length(isGad));
             for iCell = 1:length(isGad)
@@ -191,5 +191,3 @@ for iPars = length(parameterSets):-1:1 % results from parameterSets
         end
     end
 end
-
-
