@@ -324,6 +324,235 @@ for ex = 1:size(examplesTun,1)
 end
 
 %% Prepare for Figs. 1J-L
+% Collect relevant variables from tuning data
+subjects = {};
+dates = {};
+sets = [];
+planes = [];
+ids = [];
+prefDirs = [];
+minima = [];
+maxima = [];
+means = [];
+isTuned = [];
+isSuppr = [];
+amplitudes = {};
+largePupil = {};
 
+subjDirs = dir(fullfile(folderBase, 'boutons', 'SS*'));
+iSet = 0;
+for subj = 1:length(subjDirs)
+    name = subjDirs(subj).name;
+    dateDirs = dir(fullfile(folderBase, 'boutons', name, '2*'));
+    for dt = 1:length(dateDirs)
+        date = dateDirs(dt).name;
+        folder = fullfile(folderBase, 'boutons', name, date, '001');
+        if ~isfile(fullfile(folderBase, 'boutons', name, ...
+                date, '001\_ss_tuning.parametersSmall.npy'))
+            continue
+        end
+        iSet = iSet + 1;
+        
+        p = readNPY(fullfile(folderBase, 'boutons', name, ...
+            date, '001\_ss_2pRois._ss_2pPlanes.npy'));
+        n = length(p);
+        planes = [planes; p];
+        ids = [ids; readNPY(fullfile(folderBase, 'boutons', name, ...
+            date, '001\_ss_2pRois.ids.npy'))];
+        sets = [sets; ones(n,1) .* iSet];
+        subjects = [subjects; repmat({name}, n, 1)];
+        dates = [dates; repmat({date}, n, 1)];
+        parsS = readNPY(fullfile(folderBase, 'boutons', name, ...
+            date, '001\_ss_tuning.parametersSmall.npy'));
+        parsL = readNPY(fullfile(folderBase, 'boutons', name, ...
+            date, '001\_ss_tuning.parametersLarge.npy'));
+        isT = [~isnan(parsS(:,2)), ~isnan(parsL(:,2))];
+        isTuned = [isTuned; all(isT,2)];
+        prefD = parsS(:,1);
+        prefD(~isT(:,1)) = NaN;
+        prefDirs = [prefDirs; prefD];
+        curves = readNPY(fullfile(folderBase, 'boutons', name, ...
+            date, '001\_ss_tuning.curvesSmall.npy'));
+        isSuppr = [isSuppr; readNPY(fullfile(folderBase, 'boutons', name, ...
+            date, '001\_ss_tuning.isSuppressed.npy'))];
+        amplitudes = [amplitudes; {readNPY(fullfile(folderBase, ...
+            'boutons', name, date, '001\_ss_gratingTrials.amplitudes.npy'))}];
+        largePupil = [largePupil; {readNPY(fullfile(folderBase, ...
+            'boutons', name, date, '001\_ss_gratingTrials.largePupil.npy'))}];
+        
+        mi = NaN(n,1);
+        ma = NaN(n,1);
+        mn = NaN(n,1);
+        for iCell = 1:n
+            if isT(iCell,1) % tuned when pupil small
+                mn(iCell) = mean(curves(iCell,:));
+                oris = mod(prefD(iCell) + [0 90 180], 360);
+                respS = gratings.orituneWrappedConditions(parsS(iCell,:), oris);
+                ma(iCell) = respS(1);
+                if respS(1)-respS(2) < 0 % suppressed by gratings
+                    mi(iCell) = max(respS(2:3));
+                else
+                    mi(iCell) = min(respS(2:3));
+                end
+            else
+                mn(iCell) = parsS(iCell,1);
+            end
+        end
+        minima = [minima; mi];
+        maxima = [maxima; ma];
+        means = [means; mn];
+    end
+end
+
+shuffles = 1000;
+directions = 0:30:330;
+dirVectors = exp(directions./180.*pi .* 1i);
+oriVectors = exp(directions./180.*2.*pi .* 1i);
+
+meanAmp = []; % [ROIs x stimuli], amplitudes averaged across small pupil trials
+shuffleAmp = []; % [ROIs x stimuli x shuffles] mean amplitudes after shuffling stimulus labels
+for k = 1:length(amplitudes)
+    amp = permute(amplitudes{k},[3 1 2]); % [ROIs x stimuli x repetitions]
+    ppl = repmat(permute(largePupil{k},[3 1 2]),size(amp,1),1,1);
+    amp(ppl) = NaN;
+    meanAmp = [meanAmp; nanmean(amp, 3)];
+    ampFlat = reshape(amp, size(amp,1), []);
+    shR = NaN(size(amp,1),length(dirVectors),shuffles);
+    for sh = 1:shuffles
+        p = randperm(size(ampFlat,2));
+        ampSh = reshape(ampFlat(:,p), size(amp));
+        shR(:,:,sh) = nanmean(ampSh, 3);
+    end
+    shuffleAmp = [shuffleAmp; shR];
+end
+
+% inverte responses of suppressed ROIs
+meanAmp(isSuppr==1,:) = -meanAmp(isSuppr==1,:);
+shuffleAmp(isSuppr==1,:,:) = -shuffleAmp(isSuppr==1,:,:);
+% set responses below baseline to zero
+meanAmp(meanAmp<0) = 0;
+shuffleAmp(shuffleAmp<0) = 0;
+% standardize responses so they sum to one
+meanAmp = meanAmp ./ sum(meanAmp,2);
+shuffleAmp = shuffleAmp ./ sum(shuffleAmp,2);
+
+% Determine DSIs
+vects = sum(dirVectors .* meanAmp, 2);
+shuffleVects = squeeze(sum(dirVectors .* shuffleAmp, 2));
+DSIs = abs(vects);
+nullDSIs = abs(shuffleVects);
+p_DSI = sum(nullDSIs > DSIs,2) ./ shuffles;
+
+% Determine OSIs
+vects = sum(oriVectors .* meanAmp, 2);
+shuffleVects = squeeze(sum(oriVectors .* shuffleAmp, 2));
+OSIs = abs(vects);
+nullOSIs = abs(shuffleVects);
+p_OSI = sum(nullOSIs > OSIs,2) ./ shuffles;
 
 %% Figure 1J
+cols = lines(3);
+xLim = [9 10];
+yLim = [3 5];
+
+mi = minima;
+ma = maxima;
+j = isnan(mi); % not tuned when pupil small
+mi(j) = means(j);
+ma(j) = means(j);
+
+j = ma - mi < 0; % if suppressed by gratings, swap responses to preferred
+                 % and non-preferred stimulus because response to pref is
+                 % minimum response
+m = mi(j);
+mi(j) = ma(j);
+ma(j) = m;
+b_mi = [-flip(2.^(-3:xLim(1))), 0, 2.^(-3:xLim(2))];
+b_ma = [-flip(2.^(-3:yLim(1))), 0, 2.^(-3:yLim(2))];
+
+figure
+N1 = histcounts(ma(isTuned==1), b_ma);
+N2 = histcounts(ma(isTuned==0), b_ma);
+b = bar(1.5:length(b_ma), [N1',N2'], 'stacked');
+b(1).FaceColor = 'k';
+b(2).FaceColor = 'w';
+hold on
+for ex = 1:size(examplesTun,1)
+    idx = strcmp(subjects, examplesTun{ex,1}) & ...
+        strcmp(dates, examplesTun{ex,2}) & planes==examplesTun{ex,3} & ...
+        ids==examplesTun{ex,4};
+    exMax = find(b_ma<ma(idx),1,'last');
+    if ma(idx)>0
+        exMax = exMax + rem(log2(ma(idx)),1);
+    else
+        exMax = exMax - rem(log2(-ma(idx)),1);
+    end
+    plot(exMax,520,'v','Color',cols(ex,:))
+end
+xlabel('Maximum')
+ylabel('#Boutons')
+title(sprintf('n = %d', sum(~isnan(ma))))
+set(gca,'XTick',1:length(b_ma),'XTickLabel',b_ma,'box','off')
+legend(b,{'tuned','not tuned'},'Location','NorthWest')
+
+%% Figure 1K
+% Plot scatter of DSI versus OSI
+cols = lines(4);
+binSize = 0.02;
+mx = ceil(max([DSIs; OSIs]) / binSize) * binSize;
+colors = [1 0 0; 0 0 1; .5 0 .5];
+inds = [p_DSI<.05&p_OSI>=.05, p_DSI>=.05&p_OSI<.05, p_DSI<.05&p_OSI<.05];
+h = [0 0 0];
+figure
+hold on
+plot([0 mx], [0 mx], 'k')
+for k = 3:-1:1
+    h(k) = scatter(DSIs(isTuned & inds(:,k)), ...
+        OSIs(isTuned & inds(:,k)), [], colors(k,:), 'filled');
+end
+for ex = 1:size(examplesTun,1)
+    idx = strcmp(subjects, examplesTun{ex,1}) & ...
+        strcmp(dates, examplesTun{ex,2}) & planes==examplesTun{ex,3} & ...
+        ids==examplesTun{ex,4};
+    if p_DSI(idx)>=0.05 && p_OSI(idx)>=0.05
+        continue
+    end
+    scatter(DSIs(idx), OSIs(idx), [], cols(ex,:), 'LineWidth', 2)
+end
+legend(h,'dir-sel','ori-sel','dir&ori')
+axis square
+axis([0 mx 0 mx])
+set(gca, 'box','off','XTick',0:.1:mx,'YTick',0:.1:mx)
+xlabel('DSI')
+ylabel('OSI')
+title(sprintf('n = %d', sum(isTuned & (p_DSI<0.05|p_OSI<0.05))))
+
+%% Figure 1L
+cols = lines(4);
+binSize = 10;
+edges = 0:binSize:360;
+bins = edges(1:end-1) + binSize/2;
+N1 = histcounts(prefDirs(p_DSI < 0.05), edges);
+N2 = histcounts(prefDirs(p_DSI >= 0.05 & p_OSI < 0.05), edges);
+figure
+b = bar(bins, [N2; N1], 'stacked');
+b(1).FaceColor = 'w';
+b(2).FaceColor = 'k';
+hold on
+Y = fft(N1+N2);
+bins10 = bins + (0:9)'./10.*binSize;
+bins10 = bins10(:)';
+Y4 = zeros(1,length(bins10));
+Y4(1) = Y(1)*10;
+Y4([1+4 end-4+1]) = Y([1+4 end-4+1]).*10;
+plot(bins10, ifft(Y4), 'r', 'LineWidth', 1)
+for ex = 1:length(exampleIndices)
+    plot(prefDirs(exampleIndices(ex)), 10, 'v', 'Color', cols(ex,:))
+end
+xlim([0 360])
+set(gca, 'XTick', 0:90:360, 'box', 'off')
+legend('direction selective','only orientation selective')
+xlabel('Preferred direction (deg)')
+ylabel(sprintf('#%s', label))
+title(sprintf('Preferred directions (fitted with Gaussians) (n=%d)', ...
+    sum(N1+N2)))
