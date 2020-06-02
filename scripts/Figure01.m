@@ -4,8 +4,6 @@ folderTools = 'C:\STORAGE\workspaces';
 folderThisRepo = 'C:\dev\workspace\schroeder-et-al-2020';
 
 %% Parameters
-RFtypes = {'ON','OFF','ON+OFF'};
-
 % for evaluation of receptive fields (significance/goodness)
 minExplainedVarianceStim = 0.01;
 minPVal = 0.05;
@@ -17,19 +15,13 @@ offThr = -0.5; % OFF field is at least three times stronger than ON field
 
 % colormaps
 red = [1 0 .5];
-% green = [0 1 .5];
 blue = [0 .5 1];
-% orange = [1 .5 0];
 black = [1 1 1].*0.5;
 grad = linspace(0,1,100)';
 reds = red.*flip(grad) + [1 1 1].*grad;
-% greens = green.*flip(grad) + [1 1 1].*grad;
 blacks = black.*flip(grad) + [1 1 1].*grad;
-% cm_ON = [greens; flip(reds(1:end-1,:),1)];
 cm_ON = [blacks; flip(reds(1:end-1,:),1)];
 blues = blue.*flip(grad) + [1 1 1].*grad;
-% oranges = orange.*flip(grad) + [1 1 1].*grad;
-% cm_OFF = [oranges; flip(blues(1:end-1,:),1)];
 cm_OFF = [blacks; flip(blues(1:end-1,:),1)];
 colormaps = {cm_ON, cm_OFF};
 
@@ -214,7 +206,6 @@ title(sprintf('n = %d', sum(validRF)))
 
 %% Figure 1H & I
 buffer = 2; % in sec (before and after stim period)
-cols = [0 0 0; 1 0 0];
 for ex = 1:size(examplesTun,1)
     planes = readNPY(fullfile(folderBase, 'boutons', examplesTun{ex,1}, ...
         examplesTun{ex,2}, '001\_ss_2pRois._ss_2pPlanes.npy'));
@@ -327,7 +318,6 @@ end
 % Collect relevant variables from tuning data
 subjects = {};
 dates = {};
-sets = [];
 planes = [];
 ids = [];
 prefDirs = [];
@@ -340,7 +330,6 @@ amplitudes = {};
 largePupil = {};
 
 subjDirs = dir(fullfile(folderBase, 'boutons', 'SS*'));
-iSet = 0;
 for subj = 1:length(subjDirs)
     name = subjDirs(subj).name;
     dateDirs = dir(fullfile(folderBase, 'boutons', name, '2*'));
@@ -351,7 +340,6 @@ for subj = 1:length(subjDirs)
                 date, '001\_ss_tuning.parametersSmall.npy'))
             continue
         end
-        iSet = iSet + 1;
         
         p = readNPY(fullfile(folderBase, 'boutons', name, ...
             date, '001\_ss_2pRois._ss_2pPlanes.npy'));
@@ -359,7 +347,6 @@ for subj = 1:length(subjDirs)
         planes = [planes; p];
         ids = [ids; readNPY(fullfile(folderBase, 'boutons', name, ...
             date, '001\_ss_2pRois.ids.npy'))];
-        sets = [sets; ones(n,1) .* iSet];
         subjects = [subjects; repmat({name}, n, 1)];
         dates = [dates; repmat({date}, n, 1)];
         parsS = readNPY(fullfile(folderBase, 'boutons', name, ...
@@ -375,10 +362,12 @@ for subj = 1:length(subjDirs)
             date, '001\_ss_tuning.curvesSmall.npy'));
         isSuppr = [isSuppr; readNPY(fullfile(folderBase, 'boutons', name, ...
             date, '001\_ss_tuning.isSuppressed.npy'))];
-        amplitudes = [amplitudes; {readNPY(fullfile(folderBase, ...
-            'boutons', name, date, '001\_ss_gratingTrials.amplitudes.npy'))}];
-        largePupil = [largePupil; {readNPY(fullfile(folderBase, ...
-            'boutons', name, date, '001\_ss_gratingTrials.largePupil.npy'))}];
+        amp = readNPY(fullfile(folderBase, ...
+            'boutons', name, date, '001\_ss_gratingTrials.amplitudes.npy'));
+        amplitudes = [amplitudes; permute(mat2cell(amp, ...
+            size(amp,1), size(amp,2), ones(1,n)), [3 1 2])];
+        largePupil = [largePupil; repmat({readNPY(fullfile(folderBase, ...
+            'boutons', name, date, '001\_ss_gratingTrials.largePupil.npy'))}, n, 1)];
         
         mi = NaN(n,1);
         ma = NaN(n,1);
@@ -409,22 +398,34 @@ directions = 0:30:330;
 dirVectors = exp(directions./180.*pi .* 1i);
 oriVectors = exp(directions./180.*2.*pi .* 1i);
 
-meanAmp = []; % [ROIs x stimuli], amplitudes averaged across small pupil trials
-shuffleAmp = []; % [ROIs x stimuli x shuffles] mean amplitudes after shuffling stimulus labels
-for k = 1:length(amplitudes)
-    amp = permute(amplitudes{k},[3 1 2]); % [ROIs x stimuli x repetitions]
-    ppl = repmat(permute(largePupil{k},[3 1 2]),size(amp,1),1,1);
-    amp(ppl) = NaN;
-    meanAmp = [meanAmp; nanmean(amp, 3)];
-    ampFlat = reshape(amp, size(amp,1), []);
-    shR = NaN(size(amp,1),length(dirVectors),shuffles);
+ampSmall = amplitudes; % {nROIs x 1}, each entry: [nStim x nReps]
+ampShuffle = cell(size(amplitudes));  % {nROIs x 1}, each entry: [nReps x nStim x nShuffles]
+sz = cell2mat(cellfun(@size, amplitudes, 'UniformOutput', false));
+numReps = unique(sz(:,2));
+numStim = unique(sz(:,1));
+permutations = cell(1, length(numReps));
+for m = 1:length(numReps)
+    permutations{m} = NaN(numReps(m)*numStim,1);
     for sh = 1:shuffles
-        p = randperm(size(ampFlat,2));
-        ampSh = reshape(ampFlat(:,p), size(amp));
-        shR(:,:,sh) = nanmean(ampSh, 3);
+        permutations{m}(:,sh) = randperm(numReps(m)*numStim);
     end
-    shuffleAmp = [shuffleAmp; shR];
 end
+for n = 1:size(amplitudes,1)
+    m = find(numReps == size(amplitudes{n},2));
+    if all(isnan(ampSmall{n}(:)))
+        ampShuffle{n} = NaN(numReps(m), numStim, shuffles);
+        continue
+    end
+    ampSmall{n}(largePupil{n}) = NaN;
+    a = reshape(ampSmall{n}, [], 1);
+    a = a(permutations{m});
+    ampShuffle{n} = reshape(a, numReps(m), numStim, shuffles);
+end
+meanAmp = cellfun(@nanmean, ampSmall, repmat({2},size(amplitudes,1),1), ...
+    'UniformOutput', false);
+meanAmp = cell2mat(meanAmp')'; % [ROIs x stimuli], amplitudes averaged across small pupil trials
+shuffleAmp = cellfun(@nanmean, ampShuffle, 'UniformOutput', false);
+shuffleAmp = cell2mat(shuffleAmp); % [ROIs x stimuli x shuffles] mean amplitudes after shuffling stimulus labels
 
 % inverte responses of suppressed ROIs
 meanAmp(isSuppr==1,:) = -meanAmp(isSuppr==1,:);
@@ -433,8 +434,8 @@ shuffleAmp(isSuppr==1,:,:) = -shuffleAmp(isSuppr==1,:,:);
 meanAmp(meanAmp<0) = 0;
 shuffleAmp(shuffleAmp<0) = 0;
 % standardize responses so they sum to one
-meanAmp = meanAmp ./ sum(meanAmp,2);
-shuffleAmp = shuffleAmp ./ sum(shuffleAmp,2);
+meanAmp = meanAmp ./ nansum(meanAmp,2);
+shuffleAmp = shuffleAmp ./ nansum(shuffleAmp,2);
 
 % Determine DSIs
 vects = sum(dirVectors .* meanAmp, 2);
@@ -496,6 +497,19 @@ set(gca,'XTick',1:length(b_ma),'XTickLabel',b_ma,'box','off')
 legend(b,{'tuned','not tuned'},'Location','NorthWest')
 
 %% Figure 1K
+% Test significance for separation between high OSIs and high DSIs
+goodDSIs = DSIs(~isnan(DSIs) & isTuned & (p_DSI<.05|p_OSI<.05));
+goodOSIs = OSIs(~isnan(OSIs) & isTuned & (p_DSI<.05|p_OSI<.05));
+numPerm = 10000;
+permutations = NaN(length(goodDSIs), numPerm);
+for p = 1:size(permutations,2)
+    permutations(:,p) = randperm(size(permutations,1));
+end
+permOSIs = goodOSIs(permutations);
+meanAbsDiff = mean(abs(goodDSIs - goodOSIs));
+permAbsDiffs = mean(abs(goodDSIs - permOSIs), 1);
+pDiff = sum(permAbsDiffs > meanAbsDiff) / numPerm;
+
 % Plot scatter of DSI versus OSI
 cols = lines(4);
 binSize = 0.02;
@@ -525,7 +539,8 @@ axis([0 mx 0 mx])
 set(gca, 'box','off','XTick',0:.1:mx,'YTick',0:.1:mx)
 xlabel('DSI')
 ylabel('OSI')
-title(sprintf('n = %d', sum(isTuned & (p_DSI<0.05|p_OSI<0.05))))
+title(sprintf('n = %d (DSI and OSI are different, p = %.2e)', ...
+    sum(~isnan(DSIs) & isTuned & (p_DSI<0.05|p_OSI<0.05)), pDiff))
 
 %% Figure 1L
 cols = lines(3);
@@ -560,4 +575,4 @@ set(gca, 'XTick', 0:90:360, 'box', 'off')
 legend('direction selective','only orientation selective')
 xlabel('Preferred direction (deg)')
 ylabel('#Boutons')
-title(sprintf('n = %d)', sum(N1+N2)))
+title(sprintf('n = %d', sum(N1+N2)))
