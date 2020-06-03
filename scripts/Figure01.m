@@ -97,10 +97,7 @@ subjects = {};
 dates = {};
 planes = [];
 ids = [];
-rfs = [];
-evTotal = [];
 evStim = [];
-evRun = [];
 lambdasStim = [];
 pValues = [];
 OnOffValues = [];
@@ -123,13 +120,8 @@ for subj = 1:length(subjDirs)
             date, '001\_ss_2pRois.ids.npy'))];
         rfs_exp = readNPY(fullfile(folderBase, 'boutons', name, ...
             date, '001\_ss_rf.maps.npy'));
-        rfs = [rfs; rfs_exp];
-        evTotal = [evTotal; readNPY(fullfile(folderBase, 'boutons', name, ...
-            date, '001\_ss_rf.explVars.npy'))];
         evStim = [evStim; readNPY(fullfile(folderBase, 'boutons', name, ...
             date, '001\_ss_rf.explVarsStim.npy'))];
-        evRun = [evRun; readNPY(fullfile(folderBase, 'boutons', name, ...
-            date, '001\_ss_rf.explVarsRunning.npy'))];
         lambdasStim = [lambdasStim; readNPY(fullfile(folderBase, 'boutons', name, ...
             date, '001\_ss_rf.lambdasStim.npy'))];
         pValues = [pValues; readNPY(fullfile(folderBase, 'boutons', name, ...

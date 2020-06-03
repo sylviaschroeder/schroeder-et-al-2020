@@ -479,14 +479,12 @@ subjects = {};
 dates = {};
 planes = [];
 ids = [];
-prefDirs = [];
 minima = [];
 maxima = [];
 means = [];
 nullMinima = [];
 nullMaxima = [];
 nullMeans = [];
-isTuned = [];
 isSuppr = [];
 amplitudes = {};
 largePupil = {};
@@ -521,11 +519,6 @@ for subj = 1:length(subjDirs)
         nullParsL = readNPY(fullfile(folderBase, 'boutons', name, ...
             date, '001\_ss_tuning.nullParametersLarge.npy'));
         nullPars = cat(4, nullParsS, nullParsL);
-        isT = [~isnan(parsS(:,2)), ~isnan(parsL(:,2))];
-        isTuned = [isTuned; all(isT,2)];
-        prefD = parsS(:,1);
-        prefD(~isT(:,1)) = NaN;
-        prefDirs = [prefDirs; prefD];
         curvesS = readNPY(fullfile(folderBase, 'boutons', name, ...
             date, '001\_ss_tuning.curvesSmall.npy'));
         curvesL = readNPY(fullfile(folderBase, 'boutons', name, ...
