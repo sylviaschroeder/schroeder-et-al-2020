@@ -13,6 +13,10 @@ maxLambda = 1;
 onThr = 0.5; % ON field is at least three times stronger than OFF field
 offThr = -0.5; % OFF field is at least three times stronger than ON field
 
+%% Add paths
+addpath(genpath(fullfile(folderTools, 'npy-matlab')))
+addpath(fullfile(folderThisRepo))
+
 %% Prepare for Figs. S1C-F
 % Collect relevant variables from tuning data
 subjects = {};

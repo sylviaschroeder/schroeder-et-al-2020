@@ -41,7 +41,7 @@ examplesTun = {'SS076', '2017-10-04', 1, 137; ...
 addpath(genpath(fullfile(folderTools, 'npy-matlab')))
 addpath(fullfile(folderThisRepo))
 
-%% Figure 1F
+%% Figure 1F (receptive fields of example boutons)
 titles = {'ON field','OFF field'};
 for ex = 1:size(examplesRF,1)
     roiPlanes = readNPY(fullfile(folderBase, 'boutons', examplesRF{ex,1}, ...
@@ -91,7 +91,7 @@ for ex = 1:size(examplesRF,1)
     end
 end
 
-%% Figure 1G
+%% Figure 1G (histogram of ON/OFF indices)
 % Collect relevant variables from visual noise data
 subjects = {};
 dates = {};
@@ -196,7 +196,7 @@ xlabel('ON/OFF index')
 ylabel('#Boutons')
 title(sprintf('n = %d', sum(validRF)))
 
-%% Figure 1H & I
+%% Figure 1H & I (responses to single gratings and tuning curves for example boutons)
 buffer = 2; % in sec (before and after stim period)
 for ex = 1:size(examplesTun,1)
     planes = readNPY(fullfile(folderBase, 'boutons', examplesTun{ex,1}, ...
@@ -443,7 +443,7 @@ OSIs = abs(vects);
 nullOSIs = abs(shuffleVects);
 p_OSI = sum(nullOSIs > OSIs,2) ./ shuffles;
 
-%% Figure 1J
+%% Figure 1J (histogram of maximum amplitudes in response to gratings)
 cols = lines(3);
 xLim = [9 10];
 yLim = [3 5];
@@ -488,7 +488,7 @@ title(sprintf('n = %d', sum(~isnan(ma))))
 set(gca,'XTick',1:length(b_ma),'XTickLabel',b_ma,'box','off')
 legend(b,{'tuned','not tuned'},'Location','NorthWest')
 
-%% Figure 1K
+%% Figure 1K (scatter of DSIs vs OSIs)
 % Test significance for separation between high OSIs and high DSIs
 goodDSIs = DSIs(~isnan(DSIs) & isTuned & (p_DSI<.05|p_OSI<.05));
 goodOSIs = OSIs(~isnan(OSIs) & isTuned & (p_DSI<.05|p_OSI<.05));
@@ -534,7 +534,7 @@ ylabel('OSI')
 title(sprintf('n = %d (DSI and OSI are different, p = %.2e)', ...
     sum(~isnan(DSIs) & isTuned & (p_DSI<0.05|p_OSI<0.05)), pDiff))
 
-%% Figure 1L
+%% Figure 1L (histogram of preferred directions)
 cols = lines(3);
 binSize = 10;
 edges = 0:binSize:360;

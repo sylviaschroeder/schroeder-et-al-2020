@@ -21,7 +21,7 @@ examplesTun = {'SS076', '2017-10-04', 1, 137; ...
 addpath(genpath(fullfile(folderTools, 'npy-matlab')))
 addpath(fullfile(folderThisRepo))
 
-%% Figure 2A,B
+%% Figure 2A,B (bouton traces during darkness and gratings)
 planes = readNPY(fullfile(folderBase, 'boutons', examplesCorr{1,1}, ...
     examplesCorr{1,2}, '001\_ss_2pRois._ss_2pPlanes.npy'));
 ids = readNPY(fullfile(folderBase, 'boutons', examplesCorr{1,1}, ...
@@ -174,7 +174,6 @@ for subj = 1:length(subjDirs)
     dateDirs = dir(fullfile(folderBase, 'boutons', name, '2*'));
     for dt = 1:length(dateDirs)
         date = dateDirs(dt).name;
-        folder = fullfile(folderBase, 'boutons', name, date, '001');
         
         p = readNPY(fullfile(folderBase, 'boutons', name, ...
             date, '001\_ss_2pRois._ss_2pPlanes.npy'));
@@ -235,7 +234,7 @@ pValsRunGratings(ind) = 1 - pValsRunGratings(ind);
 pValsRunGratings = 2 .* pValsRunGratings; % two-sided test
 pValsRunGratings(pValsRunGratings==0) = 1/size(nullsRunDark,2);
 
-%% Figure 2C
+%% Figure 2C (correlations with running during darkness)
 ind = isnan(rhosRunDark);
 rhos = rhosRunDark;
 rhos(ind) = [];
@@ -281,7 +280,7 @@ ylabel('Proportion of boutons')
 title(sprintf('Darkness (n = %d)', length(rhos)))
 legend(h, {'boutons','shifted'}, 'Location', 'NorthWest')
 
-%% Figure 2D
+%% Figure 2D (correlations with running during gratings)
 ind = isnan(rhosRunGratings);
 rhos = rhosRunGratings;
 rhos(ind) = [];
@@ -327,7 +326,7 @@ ylabel('Proportion of boutons')
 title(sprintf('Gratings (n = %d)', length(rhos)))
 legend(h, {'boutons','shifted'}, 'Location', 'NorthWest')
 
-%% Figure 2E
+%% Figure 2E (scatterplot: correlations with running during darkness vs during gratings)
 % Scatter plot
 figure
 hold on
@@ -380,7 +379,7 @@ ax = gca;
 ax.Box = 'off';
 legend('p < 0.05', 'p >= 0.05')
 
-%% Figure 2F
+%% Figure 2F (correlations with pupil during gratings)
 ind = isnan(rhosPupilGratings);
 rhos = rhosPupilGratings;
 rhos(ind) = [];
@@ -426,7 +425,7 @@ ylabel('Proportion of boutons')
 title(sprintf('Gratings (n = %d)', length(rhos)))
 legend(h, {'boutons','shifted'}, 'Location', 'NorthWest')
 
-%% Figure 2G
+%% Figure 2G (example tuning curves, small and large pupil)
 cols = 'kr';
 for ex = 1:size(examplesTun,1)
     planes = readNPY(fullfile(folderBase, 'boutons', examplesTun{ex,1}, ...
@@ -495,7 +494,6 @@ for subj = 1:length(subjDirs)
     dateDirs = dir(fullfile(folderBase, 'boutons', name, '2*'));
     for dt = 1:length(dateDirs)
         date = dateDirs(dt).name;
-        folder = fullfile(folderBase, 'boutons', name, date, '001');
         if ~isfile(fullfile(folderBase, 'boutons', name, ...
                 date, '001\_ss_tuning.parametersSmall.npy'))
             continue
@@ -624,7 +622,7 @@ DSIsSmall = abs(vects);
 vects = sum(dirVectors .* meanAmpLarge, 2);
 DSIsLarge = abs(vects);
 
-%% Figure 2H
+%% Figure 2H (response modulations)
 cols = lines(4);
 binSize = 20;
 mini = -80;
@@ -705,7 +703,7 @@ legend(h, {'boutons','shifted'}, 'Location', 'NorthWest')
 legend('boxoff')
 set(gca, 'XTick', [mini 0 maxi]);
 
-%% Figure 2I
+%% Figure 2I (DSIs small vs large pupil)
 [~,~,sbj] = unique(subjects);
 [~,~,dt] = unique(dates);
 [~,~,dataset] = unique([sbj, dt], 'rows');
