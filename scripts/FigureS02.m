@@ -17,7 +17,7 @@ offThr = -0.5; % OFF field is at least three times stronger than ON field
 addpath(genpath(fullfile(folderTools, 'npy-matlab')))
 addpath(fullfile(folderThisRepo))
 
-%% Figure S2A
+%% Figure S2A (probability of running given pupil size)
 % collect running and pupil data during gratings and gray screens from all
 % datasets
 running = {};
@@ -166,9 +166,15 @@ nullsRunGratings = [];
 rhosPupilGratings = [];
 nullsPupilGratings = [];
 
+evStim = [];
+lambdasStim = [];
+pValues = [];
+OnOffValues = [];
+
 subjDirs = dir(fullfile(folderBase, 'boutons', 'SS*'));
 for subj = 1:length(subjDirs)
     name = subjDirs(subj).name;
+    fprintf('Subject %s (%d of %d)\n', name, subj, length(subjDirs))
     dateDirs = dir(fullfile(folderBase, 'boutons', name, '2*'));
     for dt = 1:length(dateDirs)
         date = dateDirs(dt).name;
@@ -244,8 +250,8 @@ for subj = 1:length(subjDirs)
                 size(amp,1), size(amp,2), ones(1,n)), [3 1 2])];
             largePupil = [largePupil; repmat({readNPY(fullfile(folderBase, ...
                 'boutons', name, date, '001\_ss_gratingTrials.largePupil.npy'))}, n, 1)];
-            directions = [directions; repmat({readNPY(fullfile(folder, ...
-                '_ss_gratingID.directions.npy'))}, n, 1)];
+            directions = [directions; repmat({readNPY(fullfile(folderBase, ...
+                'boutons', name, date, '001\_ss_gratingID.directions.npy'))}, n, 1)];
             
             mi = NaN(n,2);
             ma = NaN(n,2);
@@ -304,5 +310,210 @@ for subj = 1:length(subjDirs)
             nullMaxima = [nullMaxima; NaN(n,2,numSh)];
             nullMeans = [nullMeans; NaN(n,2,numSh)];
         end
+        
+        if isfile(fullfile(folderBase, 'boutons', name, ...
+                date, '001\_ss_rf.maps.npy'))
+            rfs = readNPY(fullfile(folderBase, 'boutons', name, ...
+                date, '001\_ss_rf.maps.npy'));
+            ev = readNPY(fullfile(folderBase, 'boutons', name, ...
+                date, '001\_ss_rf.explVarsStim.npy'));
+            lam = readNPY(fullfile(folderBase, 'boutons', name, ...
+                date, '001\_ss_rf.lambdasStim.npy'));
+            pv = readNPY(fullfile(folderBase, 'boutons', name, ...
+                date, '001\_ss_rf.pValues.npy'));
+            
+            oov = NaN(n,2);
+            for iCell = 1:n
+                rf = squeeze(rfs(iCell,:,:,:,:));
+                [~,t] = max(max(reshape(permute(abs(rf),[1 2 4 3]), [], ...
+                    size(rf,3)), [], 1));
+                rf = squeeze(rf(:,:,t,:));
+                [mx,row] = max(max(abs(rf),[],3),[],1);
+                [~,col] = max(mx);
+                row = row(col);
+                rf = squeeze(rf(row,col,:));
+                rf(2) = -rf(2);
+                oov(iCell,:) = rf;
+            end
+        else
+            ev = NaN(n,1);
+            lam = NaN(n,1);
+            pv = NaN(n,1);
+            oov = NaN(n,2);
+        end
+        evStim = [evStim; ev];
+        lambdasStim = [lambdasStim; lam];
+        pValues = [pValues; pv];
+        OnOffValues = [OnOffValues; oov];
     end
 end
+
+% invert sign of responses of suppressed cells
+minima(isSuppr==1,:) = -minima(isSuppr==1,:);
+maxima(isSuppr==1,:) = -maxima(isSuppr==1,:);
+means(isSuppr==1,:) = -means(isSuppr==1,:);
+nullMinima(isSuppr==1,:,:) = -nullMinima(isSuppr==1,:,:);
+nullMaxima(isSuppr==1,:,:) = -nullMaxima(isSuppr==1,:,:);
+nullMeans(isSuppr==1,:,:) = -nullMeans(isSuppr==1,:,:);
+
+% find unique datasets
+[~,~,sbj] = unique(subjects);
+[~,~,dt] = unique(dates);
+[~,indDatasets,dataset] = unique([sbj, dt], 'rows');
+
+% Determine ON/OFF indices, and which boutons have a valid RF
+[~,type] = max(abs(OnOffValues),[],2);
+ind = sub2ind(size(OnOffValues), (1:size(OnOffValues,1))', type);
+signs = sign(OnOffValues(ind));
+OnOffRatios = OnOffValues;
+OnOffRatios(signs<0,:) = -OnOffRatios(signs<0,:);
+OnOffRatios(OnOffRatios<0) = 0;
+OnOffRatios = (OnOffRatios(:,1)-OnOffRatios(:,2))./sum(OnOffRatios,2);
+validRF = pValues < minPVal & evStim > minExplainedVarianceStim & ...
+    lambdasStim < maxLambda;
+
+% Determine DSIs and OSIs
+shuffles = 1000;
+dirct = 0:30:330;
+dirVectors = exp(dirct./180.*pi .* 1i);
+oriVectors = exp(dirct./180.*2.*pi .* 1i);
+ampSmall = amplitudes; % {nROIs x 1}, each entry: [nStim x nReps]
+ampLarge = amplitudes;
+ampShuffle = cell(size(amplitudes));  % {nROIs x 1}, each entry: [nReps x nStim x nShuffles]
+sz = cell2mat(cellfun(@size, amplitudes, 'UniformOutput', false));
+numReps = setdiff(unique(sz(:,2)),0);
+numStim = setdiff(unique(sz(:,1)),0);
+permutations = cell(1, length(numReps));
+for m = 1:length(numReps)
+    permutations{m} = NaN(numReps(m)*numStim,1);
+    for sh = 1:shuffles
+        permutations{m}(:,sh) = randperm(numReps(m)*numStim);
+    end
+end
+for n = 1:size(amplitudes,1)
+    m = find(numReps == size(amplitudes{n},2));
+    if all(isnan(amplitudes{n}(:))) || isempty(amplitudes{n})
+        ampSmall{n} = NaN(numStim, numReps(m));
+        ampLarge{n} = NaN(numStim, numReps(m));
+        ampShuffle{n} = NaN(numReps(m), numStim, shuffles);
+        continue
+    end
+    ampSmall{n}(largePupil{n}) = NaN;
+    ampLarge{n}(~largePupil{n}) = NaN;
+    a = reshape(ampSmall{n}, [], 1);
+    a = a(permutations{m});
+    ampShuffle{n} = reshape(a, numReps(m), numStim, shuffles);
+end
+meanAmp = cellfun(@nanmean, ampSmall, repmat({2},size(amplitudes,1),1), ...
+    'UniformOutput', false);
+meanAmp = cell2mat(meanAmp')'; % [ROIs x stimuli], amplitudes averaged across small pupil trials
+meanAmpLarge = cellfun(@nanmean, ampLarge, repmat({2},size(amplitudes,1),1), ...
+    'UniformOutput', false);
+meanAmpLarge = cell2mat(meanAmpLarge')'; % [ROIs x stimuli], amplitudes averaged across small pupil trials
+shuffleAmp = cellfun(@nanmean, ampShuffle, 'UniformOutput', false);
+shuffleAmp = cell2mat(shuffleAmp); % [ROIs x stimuli x shuffles] mean amplitudes after shuffling stimulus labels
+% inverte responses of suppressed ROIs
+meanAmp(isSuppr==1,:) = -meanAmp(isSuppr==1,:);
+meanAmpLarge(isSuppr==1,:) = -meanAmpLarge(isSuppr==1,:);
+shuffleAmp(isSuppr==1,:,:) = -shuffleAmp(isSuppr==1,:,:);
+% set responses below baseline to zero
+meanAmp(meanAmp<0) = 0;
+meanAmpLarge(meanAmpLarge<0) = 0;
+shuffleAmp(shuffleAmp<0) = 0;
+% standardize responses so they sum to one
+meanAmp = meanAmp ./ nansum(meanAmp,2);
+meanAmpLarge = meanAmpLarge ./ nansum(meanAmpLarge,2);
+shuffleAmp = shuffleAmp ./ nansum(shuffleAmp,2);
+% Determine DSIs
+vects = sum(dirVectors .* meanAmp, 2);
+shuffleVects = squeeze(sum(dirVectors .* shuffleAmp, 2));
+DSIs = abs(vects);
+nullDSIs = abs(shuffleVects);
+p_DSI = sum(nullDSIs > DSIs,2) ./ shuffles;
+% Determine OSIs
+vects = sum(oriVectors .* meanAmp, 2);
+shuffleVects = squeeze(sum(oriVectors .* shuffleAmp, 2));
+OSIs = abs(vects);
+nullOSIs = abs(shuffleVects);
+p_OSI = sum(nullOSIs > OSIs,2) ./ shuffles;
+vects = sum(oriVectors .* meanAmpLarge, 2);
+OSIsLarge = abs(vects);
+
+%% Figure S2B (scatter: corr. with running vs corr. with pupil during gratings)
+figure
+plot(rhosRunGratings, rhosPupilGratings, 'k.', 'MarkerSize', 6)
+ind = ~any(isnan([rhosRunGratings, rhosPupilGratings]),2);
+[rho, pVal] = corr(rhosRunGratings(ind), rhosPupilGratings(ind));
+xlabel('Correlation with running')
+ylabel('Correlation with pupil')
+title(sprintf('n = %d, rho = %.3f, p = %.2e', sum(ind), rho, pVal))
+axis square equal
+hold on
+axis([-0.5 0.9 -0.5 0.9])
+ax = gca;
+ax.Box = 'off';
+
+%% Figure S2C (proportion of large pupil trials for each grating direction)
+lrgPpl = [];
+drctn = [];
+for k = 1:length(indDatasets)
+    lp = largePupil{indDatasets(k)};
+    lrgPpl = [lrgPpl; lp(:)];
+    d = directions{indDatasets(k)};
+    d(isnan(d)) = [];
+    d = repmat(d, 1, size(lp,2));
+    drctn = [drctn; d(:)];
+end
+
+p = anova1(lrgPpl, drctn, 'off');
+
+bins = unique(drctn);
+means = NaN(1, length(bins));
+ses = NaN(1, length(bins));
+for b = 1:length(bins)
+    means(b) = nanmean(lrgPpl(drctn==bins(b)));
+    ses(b) = nanstd(lrgPpl(drctn==bins(b))) ./ sqrt(sum(drctn==bins(b)));
+end
+means(end+1) = means(1);
+ses(end+1) = ses(1);
+bins(end+1) = 360;
+figure
+hold on
+plot(bins, means, 'k', 'LineWidth', 2)
+plot(bins, means+ses, 'k--')
+plot(bins, means-ses, 'k--')
+ylim([0.3 .5])
+xlim([0 360])
+xlabel('Direction of stimulus')
+ylabel('Proportion of large pupil trials')
+title(sprintf('ANOVA: p = %.3f', p))
+set(gca, 'XTick', 0:90:360)
+
+%% Figure S2D (scatter: OSIs during small vs large pupil)
+tbl = table(OSIs, OSIsLarge, subjects, dataset, 'VariableNames', ...
+    {'OSI_small', 'OSI_large', 'mouse', 'session'});
+lme = fitlme(tbl, 'OSI_large ~ -1 + OSI_small + (-1 + OSI_small | session) + (-1 + OSI_small | mouse)');
+
+edges = 0 : 1/100 : 1;
+bins = edges(1:end-1)+diff(edges(1:2));
+m = hot(200);
+m = m(1:180,:);
+N = histcounts2(OSIs, OSIsLarge, edges, edges);
+[xout, yout, zout] = prepareSurfaceData(bins, bins, N);
+f = fit([xout, yout], zout, 'linearinterp');
+densities = f([OSIs, OSIsLarge]);
+figure
+hold on
+scatter(OSIs, OSIsLarge, [], densities, 'filled')
+plot([0 1], [0 1], 'Color', [1 1 1].*0.8, 'LineWidth', 2)
+plot([0 1], [0 1] .* fixedEffects(lme), 'r', 'LineWidth', 2)
+colormap(m)
+c = colorbar;
+c.Label.String = 'density';
+axis square
+axis([0 1 0 1])
+set(gca, 'XTick', [0 1], 'YTick', [0 1])
+xlabel('OSI (small pupil)')
+ylabel('OSI (large pupil)')
+title(sprintf('n = %d, slope: %.3f, p = %.2e', ...
+    sum(~any(isnan([OSIs, OSIsLarge]),2)), fixedEffects(lme), coefTest(lme)))
