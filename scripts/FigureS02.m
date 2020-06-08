@@ -15,6 +15,7 @@ offThr = -0.5; % OFF field is at least three times stronger than ON field
 
 %% Add paths
 addpath(genpath(fullfile(folderTools, 'npy-matlab')))
+addpath(genpath(fullfile(folderTools, 'CircStat2012a')))
 addpath(fullfile(folderThisRepo))
 
 %% Figure S2A (probability of running given pupil size)
@@ -372,20 +373,21 @@ OnOffRatios = (OnOffRatios(:,1)-OnOffRatios(:,2))./sum(OnOffRatios,2);
 validRF = pValues < minPVal & evStim > minExplainedVarianceStim & ...
     lambdasStim < maxLambda;
 
-% Determine DSIs and OSIs
+% Determine DSIsSmall and OSIsSmall
 shuffles = 1000;
 dirct = 0:30:330;
 dirVectors = exp(dirct./180.*pi .* 1i);
 oriVectors = exp(dirct./180.*2.*pi .* 1i);
 ampSmall = amplitudes; % {nROIs x 1}, each entry: [nStim x nReps]
 ampLarge = amplitudes;
-ampShuffle = cell(size(amplitudes));  % {nROIs x 1}, each entry: [nReps x nStim x nShuffles]
+ampShuffleSmall = cell(size(amplitudes));  % {nROIs x 1}, each entry: [nReps x nStim x nShuffles]
+ampShuffleLarge = cell(size(amplitudes));
 sz = cell2mat(cellfun(@size, amplitudes, 'UniformOutput', false));
 numReps = setdiff(unique(sz(:,2)),0);
 numStim = setdiff(unique(sz(:,1)),0);
 permutations = cell(1, length(numReps));
 for m = 1:length(numReps)
-    permutations{m} = NaN(numReps(m)*numStim,1);
+    permutations{m} = NaN(numReps(m)*numStim,shuffles);
     for sh = 1:shuffles
         permutations{m}(:,sh) = randperm(numReps(m)*numStim);
     end
@@ -395,49 +397,83 @@ for n = 1:size(amplitudes,1)
     if all(isnan(amplitudes{n}(:))) || isempty(amplitudes{n})
         ampSmall{n} = NaN(numStim, numReps(m));
         ampLarge{n} = NaN(numStim, numReps(m));
-        ampShuffle{n} = NaN(numReps(m), numStim, shuffles);
+        ampShuffleSmall{n} = NaN(numStim, numReps(m), shuffles);
+        ampShuffleLarge{n} = NaN(numStim, numReps(m), shuffles);
         continue
     end
     ampSmall{n}(largePupil{n}) = NaN;
     ampLarge{n}(~largePupil{n}) = NaN;
     a = reshape(ampSmall{n}, [], 1);
     a = a(permutations{m});
-    ampShuffle{n} = reshape(a, numReps(m), numStim, shuffles);
+    ampShuffleSmall{n} = reshape(a, numStim, numReps(m), shuffles);
+    a = reshape(ampLarge{n}, [], 1);
+    a = a(permutations{m});
+    ampShuffleLarge{n} = reshape(a, numStim, numReps(m), shuffles);
 end
-meanAmp = cellfun(@nanmean, ampSmall, repmat({2},size(amplitudes,1),1), ...
+meanAmpSmall = cellfun(@nanmean, ampSmall, repmat({2},size(amplitudes,1),1), ...
     'UniformOutput', false);
-meanAmp = cell2mat(meanAmp')'; % [ROIs x stimuli], amplitudes averaged across small pupil trials
+meanAmpSmall = cell2mat(meanAmpSmall')'; % [ROIs x stimuli], amplitudes averaged across small pupil trials
 meanAmpLarge = cellfun(@nanmean, ampLarge, repmat({2},size(amplitudes,1),1), ...
     'UniformOutput', false);
 meanAmpLarge = cell2mat(meanAmpLarge')'; % [ROIs x stimuli], amplitudes averaged across small pupil trials
-shuffleAmp = cellfun(@nanmean, ampShuffle, 'UniformOutput', false);
-shuffleAmp = cell2mat(shuffleAmp); % [ROIs x stimuli x shuffles] mean amplitudes after shuffling stimulus labels
+% mean amplitudes after shuffling stimulus labels
+shuffleAmpSmall = cellfun(@nanmean, ampShuffleSmall, ...
+    repmat({2},size(amplitudes,1),1), 'UniformOutput', false);
+shuffleAmpSmall = cell2mat(shuffleAmpSmall); % [(stimuli*ROIs) x shuffles]
+shuffleAmpSmall = reshape(shuffleAmpSmall, length(dirct), [], shuffles); % [stimuli x ROIs x shuffles] mean amplitudes after shuffling stimulus labels
+shuffleAmpSmall = permute(shuffleAmpSmall, [2 1 3]); % [ROIs x stimuli x shuffles] 
+shuffleAmpLarge = cellfun(@nanmean, ampShuffleLarge, ...
+    repmat({2},size(amplitudes,1),1), 'UniformOutput', false);
+shuffleAmpLarge = cell2mat(shuffleAmpLarge); % [(stimuli*ROIs) x shuffles]
+shuffleAmpLarge = reshape(shuffleAmpLarge, length(dirct), [], shuffles); % [stimuli x ROIs x shuffles] mean amplitudes after shuffling stimulus labels
+shuffleAmpLarge = permute(shuffleAmpLarge, [2 1 3]); % [ROIs x stimuli x shuffles] 
 % inverte responses of suppressed ROIs
-meanAmp(isSuppr==1,:) = -meanAmp(isSuppr==1,:);
+meanAmpSmall(isSuppr==1,:) = -meanAmpSmall(isSuppr==1,:);
 meanAmpLarge(isSuppr==1,:) = -meanAmpLarge(isSuppr==1,:);
-shuffleAmp(isSuppr==1,:,:) = -shuffleAmp(isSuppr==1,:,:);
+shuffleAmpSmall(isSuppr==1,:,:) = -shuffleAmpSmall(isSuppr==1,:,:);
+shuffleAmpLarge(isSuppr==1,:,:) = -shuffleAmpLarge(isSuppr==1,:,:);
 % set responses below baseline to zero
-meanAmp(meanAmp<0) = 0;
+meanAmpSmall(meanAmpSmall<0) = 0;
 meanAmpLarge(meanAmpLarge<0) = 0;
-shuffleAmp(shuffleAmp<0) = 0;
+shuffleAmpSmall(shuffleAmpSmall<0) = 0;
+shuffleAmpLarge(shuffleAmpSmall<0) = 0;
 % standardize responses so they sum to one
-meanAmp = meanAmp ./ nansum(meanAmp,2);
+meanAmpSmall = meanAmpSmall ./ nansum(meanAmpSmall,2);
 meanAmpLarge = meanAmpLarge ./ nansum(meanAmpLarge,2);
-shuffleAmp = shuffleAmp ./ nansum(shuffleAmp,2);
-% Determine DSIs
-vects = sum(dirVectors .* meanAmp, 2);
-shuffleVects = squeeze(sum(dirVectors .* shuffleAmp, 2));
-DSIs = abs(vects);
+shuffleAmpSmall = shuffleAmpSmall ./ nansum(shuffleAmpSmall,2);
+shuffleAmpLarge = shuffleAmpLarge ./ nansum(shuffleAmpLarge,2);
+% Determine DSIsSmall
+vects = sum(dirVectors .* meanAmpSmall, 2);
+shuffleVects = squeeze(sum(dirVectors .* shuffleAmpSmall, 2));
+DSIsSmall = abs(vects);
 nullDSIs = abs(shuffleVects);
-p_DSI = sum(nullDSIs > DSIs,2) ./ shuffles;
-% Determine OSIs
-vects = sum(oriVectors .* meanAmp, 2);
-shuffleVects = squeeze(sum(oriVectors .* shuffleAmp, 2));
-OSIs = abs(vects);
+p_DSISmall = sum(nullDSIs > DSIsSmall,2) ./ shuffles;
+vects = sum(dirVectors .* meanAmpLarge, 2);
+shuffleVects = squeeze(sum(dirVectors .* shuffleAmpLarge, 2));
+DSIsLarge = abs(vects);
+nullDSIs = abs(shuffleVects);
+p_DSILarge = sum(nullDSIs > DSIsLarge,2) ./ shuffles;
+% Determine OSIsSmall
+vects = sum(oriVectors .* meanAmpSmall, 2);
+shuffleVects = squeeze(sum(oriVectors .* shuffleAmpSmall, 2));
+OSIsSmall = abs(vects);
 nullOSIs = abs(shuffleVects);
-p_OSI = sum(nullOSIs > OSIs,2) ./ shuffles;
+p_OSISmall = sum(nullOSIs > OSIsSmall,2) ./ shuffles;
 vects = sum(oriVectors .* meanAmpLarge, 2);
+shuffleVects = squeeze(sum(oriVectors .* shuffleAmpLarge, 2));
 OSIsLarge = abs(vects);
+nullOSIs = abs(shuffleVects);
+p_OSILarge = sum(nullOSIs > OSIsLarge,2) ./ shuffles;
+% Determine pref directions
+vects = squeeze(sum(dirVectors .* meanAmpSmall, 2)); % [neuron x small/large pupil]
+prefDirsSmall = mod(angle(vects) ./ pi .* 180, 360);
+vects = squeeze(sum(dirVectors .* meanAmpLarge, 2)); % [neuron x small/large pupil]
+prefDirsLarge = mod(angle(vects) ./ pi .* 180, 360);
+% Determine pref directions
+vects = squeeze(sum(oriVectors .* meanAmpSmall, 2)); % [neuron x small/large pupil]
+prefOrisSmall = mod(angle(vects) ./ pi .* 180, 360);
+vects = squeeze(sum(oriVectors .* meanAmpLarge, 2)); % [neuron x small/large pupil]
+prefOrisLarge = mod(angle(vects) ./ pi .* 180, 360);
 
 %% Figure S2B (scatter: corr. with running vs corr. with pupil during gratings)
 figure
@@ -489,8 +525,8 @@ ylabel('Proportion of large pupil trials')
 title(sprintf('ANOVA: p = %.3f', p))
 set(gca, 'XTick', 0:90:360)
 
-%% Figure S2D (scatter: OSIs during small vs large pupil)
-tbl = table(OSIs, OSIsLarge, subjects, dataset, 'VariableNames', ...
+%% Figure S2D (scatter: OSIsSmall during small vs large pupil)
+tbl = table(OSIsSmall, OSIsLarge, subjects, dataset, 'VariableNames', ...
     {'OSI_small', 'OSI_large', 'mouse', 'session'});
 lme = fitlme(tbl, 'OSI_large ~ -1 + OSI_small + (-1 + OSI_small | session) + (-1 + OSI_small | mouse)');
 
@@ -498,13 +534,13 @@ edges = 0 : 1/100 : 1;
 bins = edges(1:end-1)+diff(edges(1:2));
 m = hot(200);
 m = m(1:180,:);
-N = histcounts2(OSIs, OSIsLarge, edges, edges);
+N = histcounts2(OSIsSmall, OSIsLarge, edges, edges);
 [xout, yout, zout] = prepareSurfaceData(bins, bins, N);
 f = fit([xout, yout], zout, 'linearinterp');
-densities = f([OSIs, OSIsLarge]);
+densities = f([OSIsSmall, OSIsLarge]);
 figure
 hold on
-scatter(OSIs, OSIsLarge, [], densities, 'filled')
+scatter(OSIsSmall, OSIsLarge, [], densities, 'filled')
 plot([0 1], [0 1], 'Color', [1 1 1].*0.8, 'LineWidth', 2)
 plot([0 1], [0 1] .* fixedEffects(lme), 'r', 'LineWidth', 2)
 colormap(m)
@@ -516,4 +552,48 @@ set(gca, 'XTick', [0 1], 'YTick', [0 1])
 xlabel('OSI (small pupil)')
 ylabel('OSI (large pupil)')
 title(sprintf('n = %d, slope: %.3f, p = %.2e', ...
-    sum(~any(isnan([OSIs, OSIsLarge]),2)), fixedEffects(lme), coefTest(lme)))
+    sum(~any(isnan([OSIsSmall, OSIsLarge]),2)), fixedEffects(lme), coefTest(lme)))
+
+%% Figure S2E (scatter: preferred directions during small vs large pupil)
+ind = p_DSISmall < 0.05 & p_DSILarge < 0.05 & ~isnan(prefDirsSmall);
+diffs = abs(prefDirsSmall(ind) - prefDirsLarge(ind));
+diffs(diffs>180) = 360 - diffs(diffs>180);
+figure
+hold on
+scatter(prefDirsSmall(ind), prefDirsLarge(ind), 'k', 'filled')
+plot([0 360], [0 360], '--', 'Color', lines(1), 'LineWidth', 2)
+axis square
+axis([0 360 0 360])
+set(gca, 'XTick', 0:90:360, 'YTick', 0:90:360)
+xlabel('Preferred direction (small pupil)')
+ylabel('Preferred direction (large pupil)')
+title(sprintf('n = %d (%.1f%% with <20 degrees difference)', sum(ind), ...
+    sum(diffs<20)/sum(ind)*100))
+
+%% Figure S2F (scatter: preferred orientations during small vs large pupil)
+ind = p_OSISmall < 0.05 & p_OSILarge < 0.05 & ~isnan(prefOrisSmall);
+a = prefOrisSmall(ind)./180.*2.*pi - prefOrisLarge(ind)./180.*2.*pi;
+j = a > pi;
+a(j) = 2*pi - a(j);
+j = a < - pi;
+a(j) = 2*pi + a(j);
+p = 1e-10;
+while true
+    h = circ_mtest(a, 0, p);
+    if ~h
+        break
+    end
+    p = p * 10;
+end
+diffs = abs(prefOrisSmall(ind) - prefOrisLarge(ind));
+diffs(diffs>180) = 360 - diffs(diffs>180);
+figure
+hold on
+scatter(prefOrisSmall(ind), prefOrisLarge(ind), 'k', 'filled')
+plot([0 360], [0 360], '--', 'Color', lines(1), 'LineWidth', 2)
+axis square
+axis([0 360 0 360])
+set(gca, 'XTick', 0:90:360, 'YTick', 0:90:360)
+xlabel('Preferred orientation (small pupil)')
+ylabel('Preferred orientation (large pupil)')
+title(sprintf('n = %d (p < %.1e, circular paired t-test)', sum(ind), p))
