@@ -1,4 +1,4 @@
-# Code accompanying Schröder et al. (2020)
+# Code accompanying [Schröder et al. (2020)](https://www.cell.com/neuron/fulltext/S0896-6273(20)30318-4)
 
 * This repository will eventually contain the code to reproduce all figures from the published data and to analyse the published preprocessed data, but is currently still work in progress
 * The data used in the study are available at 
