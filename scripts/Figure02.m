@@ -363,7 +363,7 @@ ylabel('#Boutons')
 xlim(edges([1 end]))
 ax = gca;
 ax.Box = 'off';
-legend('p < 0.05', 'p >= 0.05')
+legend('p < 0.05', 'p \geq 0.05')
 % Histogram for gratings
 valid = ~isnan(rhosRunGratings);
 n1 = histcounts(rhosRunGratings(pValsRunGratings<0.05 & valid),edges)';
@@ -377,7 +377,7 @@ ylabel('#Boutons')
 xlim(edges([1 end]))
 ax = gca;
 ax.Box = 'off';
-legend('p < 0.05', 'p >= 0.05')
+legend('p < 0.05', 'p \geq 0.05')
 
 %% Figure 2F (correlations with pupil during gratings)
 ind = isnan(rhosPupilGratings);
@@ -655,6 +655,7 @@ xlim(edges([1 end]))
 title(sprintf('n = %d', sum(~isnan(respMod))))
 xlabel('Response modulation (%)')
 ylabel('#Boutons')
+legend(b, 'p < 0.05', 'p \geq 0.05')
 ax = gca;
 ax.Box = 'off';
 ax.XTick = [mini 0 maxi];

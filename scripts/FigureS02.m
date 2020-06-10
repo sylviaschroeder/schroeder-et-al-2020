@@ -13,6 +13,12 @@ maxLambda = 1;
 onThr = 0.5; % ON field is at least three times stronger than OFF field
 offThr = -0.5; % OFF field is at least three times stronger than ON field
 
+%% Examples
+examplesTun = {'SS076', '2017-10-04', 1, 137; ...
+            'SS077', '2017-10-05', 1, 24; ...
+            'SS069', '2016-10-13', 3, 4; ...
+            'SS077', '2017-10-03', 1, 56};
+        
 %% Add paths
 addpath(genpath(fullfile(folderTools, 'npy-matlab')))
 addpath(genpath(fullfile(folderTools, 'CircStat2012a')))
@@ -149,6 +155,7 @@ dates = {};
 planes = [];
 ids = [];
 
+prefDirs = [];
 minima = [];
 maxima = [];
 means = [];
@@ -243,6 +250,9 @@ for subj = 1:length(subjDirs)
             curvesL = readNPY(fullfile(folderBase, 'boutons', name, ...
                 date, '001\_ss_tuning.curvesLarge.npy'));
             curves = cat(3, curvesS, curvesL);
+            pd = parsS(:,1);
+            pd(isnan(parsS(:,2))) = NaN;
+            prefDirs = [prefDirs; pd];
             isSuppr = [isSuppr; readNPY(fullfile(folderBase, 'boutons', name, ...
                 date, '001\_ss_tuning.isSuppressed.npy'))];
             amp = readNPY(fullfile(folderBase, ...
@@ -300,6 +310,7 @@ for subj = 1:length(subjDirs)
             nullMaxima = [nullMaxima; nma];
             nullMeans = [nullMeans; nmn];
         else
+            prefDirs = [prefDirs; NaN(n,1)];
             isSuppr = [isSuppr; NaN(n,1)];
             amplitudes = [amplitudes; cell(n,1)];
             largePupil = [largePupil; cell(n,1)];
@@ -356,6 +367,20 @@ means(isSuppr==1,:) = -means(isSuppr==1,:);
 nullMinima(isSuppr==1,:,:) = -nullMinima(isSuppr==1,:,:);
 nullMaxima(isSuppr==1,:,:) = -nullMaxima(isSuppr==1,:,:);
 nullMeans(isSuppr==1,:,:) = -nullMeans(isSuppr==1,:,:);
+
+% determine response modulation and tuning depth modulation
+modFun = @(a,b) (b-a)./((abs(a)+abs(b))./2).*100;
+mx = maxima;
+nmx = nullMaxima;
+ind = all(isnan(mx),2);
+mx(ind,:) = means(ind,:);
+nmx(ind,:,:) = nullMeans(ind,:,:);
+respMod = modFun(mx(:,1), mx(:,2));
+nullRespMod = modFun(squeeze(nmx(:,1,:)), squeeze(nmx(:,2,:)));
+depth = abs(maxima - minima);
+nullDepth = abs(nullMaxima - nullMinima);
+depthMod = modFun(depth(:,1), depth(:,2));
+nullDepthMod = modFun(squeeze(nullDepth(:,1,:)), squeeze(nullDepth(:,2,:)));
 
 % find unique datasets
 [~,~,sbj] = unique(subjects);
@@ -448,22 +473,26 @@ shuffleVects = squeeze(sum(dirVectors .* shuffleAmpSmall, 2));
 DSIsSmall = abs(vects);
 nullDSIs = abs(shuffleVects);
 p_DSISmall = sum(nullDSIs > DSIsSmall,2) ./ shuffles;
+p_DSISmall(isnan(DSIsSmall)) = NaN;
 vects = sum(dirVectors .* meanAmpLarge, 2);
 shuffleVects = squeeze(sum(dirVectors .* shuffleAmpLarge, 2));
 DSIsLarge = abs(vects);
 nullDSIs = abs(shuffleVects);
 p_DSILarge = sum(nullDSIs > DSIsLarge,2) ./ shuffles;
+p_DSILarge(isnan(DSIsLarge)) = NaN;
 % Determine OSIsSmall
 vects = sum(oriVectors .* meanAmpSmall, 2);
 shuffleVects = squeeze(sum(oriVectors .* shuffleAmpSmall, 2));
 OSIsSmall = abs(vects);
 nullOSIs = abs(shuffleVects);
 p_OSISmall = sum(nullOSIs > OSIsSmall,2) ./ shuffles;
+p_OSISmall(isnan(OSIsSmall)) = NaN;
 vects = sum(oriVectors .* meanAmpLarge, 2);
 shuffleVects = squeeze(sum(oriVectors .* shuffleAmpLarge, 2));
 OSIsLarge = abs(vects);
 nullOSIs = abs(shuffleVects);
 p_OSILarge = sum(nullOSIs > OSIsLarge,2) ./ shuffles;
+p_OSILarge(isnan(OSIsLarge)) = NaN;
 % Determine pref directions
 vects = squeeze(sum(dirVectors .* meanAmpSmall, 2)); % [neuron x small/large pupil]
 prefDirsSmall = mod(angle(vects) ./ pi .* 180, 360);
@@ -597,3 +626,183 @@ set(gca, 'XTick', 0:90:360, 'YTick', 0:90:360)
 xlabel('Preferred orientation (small pupil)')
 ylabel('Preferred orientation (large pupil)')
 title(sprintf('n = %d (p < %.1e, circular paired t-test)', sum(ind), p))
+
+%% Figure S2G (scatter: preferred direction vs response modulation)
+binSize = 90;
+edges = -binSize/2 : binSize : 360+binSize/2;
+bins = 0 : binSize : 270;
+
+prefDirs2 = prefDirs;
+ind = prefDirs > 360-binSize/2;
+prefDirs2(ind) = prefDirs2(ind)-360;
+ind = ~isnan(prefDirs);
+[N,~,bin] = histcounts(prefDirs2, edges);
+
+tbl = table(respMod(ind), nominal(bin(ind)), dataset(ind), subjects(ind), ...
+    'VariableNames', {'DI','prefDir','session','mouse'});
+lme = fitlme(tbl, 'DI ~ prefDir + (prefDir|session)', 'DummyVarCoding', 'effects');
+stats = anova(lme);
+
+m = NaN(1, length(bins));
+s = NaN(1, length(bins));
+for b = 1:length(bins)
+    m(b) = nanmean(respMod(bin==b));
+    s(b) = nanstd(respMod(bin==b)) ./ sqrt(sum(~isnan(respMod(bin==b))));
+end
+
+yLim = [-90 90];
+figure
+hold on
+di = respMod;
+di(di<yLim(1)) = yLim(1);
+di(di>yLim(2)) = yLim(2);
+h = scatter(prefDirs2, di, 15, 'k', 'filled');
+errorbar(bins, m, s, 'ro', 'CapSize', 0, 'LineWidth', 2, 'MarkerSize', 10)
+xlim([-binSize/2 360-binSize/2])
+ylim(yLim)
+set(gca, 'XTick', 0:90:270, 'YTick', [yLim(1) 0 yLim(2)])
+xlabel('Preferred direction')
+ylabel('Response modulation (%)')
+title(sprintf('n = %d (p = %.3f, ANOVA)', sum(ind), stats.pValue(2)))
+
+%% Figure S2H (scatter: correlation with pupil vs response modulation)
+xLimits = [-.65 .85];
+yLimits = [-85 85];
+colors = lines(4);
+figure
+hold on
+r = rhosPupilGratings;
+r(r > xLimits(2)) = xLimits(2);
+r(r < xLimits(1)) = xLimits(1);
+m = respMod;
+m(m > yLimits(2)) = yLimits(2);
+m(m < yLimits(1)) = yLimits(1);
+scatter(r, m, [], 'k', 'filled', 'MarkerFaceAlpha', 0.3);
+for ex = 1:size(examplesTun,1)
+    idx = strcmp(subjects, examplesTun{ex,1}) & ...
+        strcmp(dates, examplesTun{ex,2}) & planes == examplesTun{ex,3} & ...
+        ids == examplesTun{ex,4};
+    plot(r(idx), m(idx), 'o', 'MarkerSize', 10, ...
+        'MarkerFaceColor', colors(ex,:), 'MarkerEdgeColor', 'none')
+end
+plot([0 0], yLimits, 'k')
+plot(xLimits, [0 0], 'k')
+axis([xLimits yLimits])
+axis square
+xlabel('Correlation with pupil')
+ylabel('Response modulation (%)')
+title(sprintf('n = %d', sum(~any(isnan([r m]),2))))
+
+%% Figure S2I
+cols = lines(4);
+binSize = 20;
+mini = -140;
+maxi = 140;
+
+confInt = prctile(nullDepthMod, [2.5 97.5], 2);
+sgnfcnt = depthMod < confInt(:,1) | depthMod > confInt(:,2);
+
+% Histogram
+figure
+bins = mini:binSize:maxi;
+edges = [bins-binSize/2, maxi+binSize/2];
+n1 = histcounts(depthMod(sgnfcnt), edges);
+n2 = histcounts(depthMod(~sgnfcnt), edges);
+b = bar(bins, [n1',n2'], 'stacked');
+b(1).FaceColor = 'k';
+b(2).FaceColor = 'w';
+xlim(edges([1 end]))
+title(sprintf('n = %d', sum(~isnan(depthMod))))
+xlabel('Tuning depth modulation (%)')
+ylabel('#Boutons')
+legend(b, 'p < 0.05', 'p \geq 0.05')
+ax = gca;
+ax.Box = 'off';
+ax.XTick = [mini 0 maxi];
+
+% cumulative distribution
+figure
+hold on
+h = [0 0];
+plot([0 0], [0 1], 'k')
+ind = ~isnan(depthMod);
+x = sort(depthMod(ind), 'ascend');
+y = (1:sum(ind)) ./ sum(ind);
+x = [-200; x; 200];
+y = [0 y 1];
+pseudo = nullDepthMod;
+pseudo(~ind,:) = [];
+xNull = sort(pseudo, 1, 'ascend');
+xNull = sort(xNull, 2, 'ascend');
+limNull = prctile(xNull, [2.5 97.5], 2);
+limNull = [[-1 -1]; limNull; [1 1]];
+yNull = (1:length(x)) ./ length(x);
+
+h(2) = fill([limNull(:,1);flip(limNull(:,2))], [yNull, flip(yNull)], ...
+    'k', 'EdgeColor', 'none', 'FaceColor', 'k', 'FaceAlpha', 0.2);
+h(1) = plot(x, y, 'k', 'LineWidth', 2);
+[xUni, ind] = unique(x);
+yUni = y(ind);
+for ex = 1:size(examplesTun,1)
+    idx = strcmp(subjects, examplesTun{ex,1}) & ...
+        strcmp(dates, examplesTun{ex,2}) & planes == examplesTun{ex,3} & ...
+        ids == examplesTun{ex,4};
+    md = depthMod(idx);
+    height = interp1(xUni, yUni, md);
+    if sgnfcnt(idx)
+        plot(md, height, 'o', 'MarkerEdgeColor', cols(ex,:), ...
+            'MarkerFaceColor', cols(ex,:), 'LineWidth', 2)
+    else
+        plot(md, height, 'o', 'MarkerEdgeColor', cols(ex,:), 'LineWidth', 2)
+    end
+end
+xlim(edges([1 end]))
+xlabel('Tuning depth modulation (%)')
+ylabel('Proportion of boutons')
+title(sprintf('n = %d', sum(~isnan(depthMod))))
+legend(h, {'boutons','shifted'}, 'Location', 'NorthWest')
+legend('boxoff')
+set(gca, 'XTick', [mini 0 maxi]);
+
+%% Figure S2J-M
+measures = [rhosRunDark, rhosPupilGratings, respMod, depthMod];
+nullMeasures = {nullsRunDark, nullsPupilGratings, nullRespMod, nullDepthMod};
+measureNames = {'Correlation with running','Correlation with pupil', ...
+    'Response modulation (%)','Tuning depth modulation (%)'};
+cellTypes = {{OnOffRatios>onThr & validRF; ...
+    OnOffRatios>=offThr & OnOffRatios<=onThr & validRF; ...
+    OnOffRatios<offThr & validRF}, ... % ON, ON+OFF, OFF
+    {isSuppr==-1; isSuppr==1}, ... %driven, suppressed
+    {any([p_OSISmall, p_OSILarge]<.05,2) & all([p_DSISmall, p_DSILarge]>=0.05,2); ...
+    any([p_DSISmall, p_DSILarge]<.05,2) & all([p_OSISmall, p_OSILarge]>=0.05,2); ...
+    any([p_DSISmall, p_DSILarge]<.05,2) & any([p_OSISmall, p_OSILarge]<.05,2)}}; % DS, OS, DS & OS
+typeNames = {{'ON','ON+OFF','OFF'},{'driven','suppressed'},{'OS only','DS only','OS & DS'}};
+colors = {[1 0 1; .5 .5 1; 0 1 1], [0 0 0; .5 .5 .5], [.5 1 0; 0 .5 1; .25 .75 .5]};
+extremes = [-1 1; -1 1; -200 200; -200 200];
+xLimits = [-0.5 0.5; -0.5 0.5; -60 60; -80 80];
+valid = [repmat(~any(isnan([rhosRunDark, rhosPupilGratings]), 2), 1, 2), ...
+    ~isnan(respMod), ~isnan(depthMod)];
+
+for m = 1:4
+    for t = 1:3
+        figure
+        hold on
+        plot([0 0], [0 1], 'k')
+        h = zeros(1, length(cellTypes{t}));
+        lbls = cell(1, length(cellTypes{t}));
+        for type = 1:length(cellTypes{t})
+            ind = cellTypes{t}{type} & valid(:,m);
+            hs = plots.plotCumHist(gca, measures(ind,m), ...
+                nullMeasures{m}(ind,:), extremes(m,:), colors{t}(type,:));
+            plot(mean(measures(ind,m)), 1.02, 'v', 'MarkerEdgeColor', 'none', ...
+                'MarkerFaceColor', colors{t}(type,:))
+            h(type) = hs(1);
+            lbls{type} = sprintf('%s (n=%d)', typeNames{t}{type}, sum(ind));
+        end
+        xlim(xLimits(m,:))
+        ylim([0 1.05])
+        legend(h, lbls, 'Location', 'SouthEast')
+        xlabel(measureNames{m})
+        ylabel('Proportion of boutons')
+    end
+end
