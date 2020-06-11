@@ -12,12 +12,20 @@ maxLambda = 1;
 % to group into ON, OFF and ON+OFF
 onThr = 0.5; % ON field is at least three times stronger than OFF field
 offThr = -0.5; % OFF field is at least three times stronger than ON field
+red = [1 0 .5];
+blue = [0 .5 1];
 
 %% Examples
 examplesTun = {'SS076', '2017-10-04', 1, 137; ...
-            'SS077', '2017-10-05', 1, 24; ...
-            'SS069', '2016-10-13', 3, 4; ...
-            'SS077', '2017-10-03', 1, 56};
+    'SS077', '2017-10-05', 1, 24; ...
+    'SS069', '2016-10-13', 3, 4; ...
+    'SS077', '2017-10-03', 1, 56};
+examplesRF = {'SS078', '2017-10-05', 1, 156, -1; ...
+            'SS078', '2017-10-05', 1, 225, 1; ...
+            'SS078', '2017-10-05', 1, 22, -1; ...
+            'SS078', '2017-09-28', 1, 243, 1; ...
+            'SS069', '2016-10-21', 1, 223, -1; ...
+            'SS078', '2017-09-28', 1, 263, 1};
         
 %% Add paths
 addpath(genpath(fullfile(folderTools, 'npy-matlab')))
@@ -693,7 +701,7 @@ xlabel('Correlation with pupil')
 ylabel('Response modulation (%)')
 title(sprintf('n = %d', sum(~any(isnan([r m]),2))))
 
-%% Figure S2I
+%% Figure S2I (histogram and cum. distr. of tuning depth modulations)
 cols = lines(4);
 binSize = 20;
 mini = -140;
@@ -782,6 +790,7 @@ extremes = [-1 1; -1 1; -200 200; -200 200];
 xLimits = [-0.5 0.5; -0.5 0.5; -60 60; -80 80];
 valid = [repmat(~any(isnan([rhosRunDark, rhosPupilGratings]), 2), 1, 2), ...
     ~isnan(respMod), ~isnan(depthMod)];
+tests = {[3,1,1], [4,6,5], [6,7,7], [6,2,1]};
 
 for m = 1:4
     for t = 1:3
@@ -790,6 +799,7 @@ for m = 1:4
         plot([0 0], [0 1], 'k')
         h = zeros(1, length(cellTypes{t}));
         lbls = cell(1, length(cellTypes{t}));
+        types = NaN(size(valid,1),1);
         for type = 1:length(cellTypes{t})
             ind = cellTypes{t}{type} & valid(:,m);
             hs = plots.plotCumHist(gca, measures(ind,m), ...
@@ -798,11 +808,46 @@ for m = 1:4
                 'MarkerFaceColor', colors{t}(type,:))
             h(type) = hs(1);
             lbls{type} = sprintf('%s (n=%d)', typeNames{t}{type}, sum(ind));
+            types(cellTypes{t}{type}) = type;
         end
         xlim(xLimits(m,:))
         ylim([0 1.05])
         legend(h, lbls, 'Location', 'SouthEast')
         xlabel(measureNames{m})
         ylabel('Proportion of boutons')
+        
+        tbl = table(measures(valid(:,m),m), categorical(types(valid(:,m))), ...
+            subjects(valid(:,m)), categorical(dataset(valid(:,m))), ...
+            'VariableNames', {'measure', 'type', 'mouse', 'session'});
+        switch tests{m}(t)
+            case 1
+                lme = fitlme(tbl, 'measure ~ type + (type|session)', 'DummyVarCoding', 'effects');
+            case 2
+                lme = fitlme(tbl, 'measure ~ type + (type|session) + (1|mouse)', 'DummyVarCoding', 'effects');
+            case 3
+                lme = fitlme(tbl, 'measure ~ type + (1|session)', 'DummyVarCoding', 'effects');
+            case 4
+                lme = fitlme(tbl, 'measure ~ type + (1|session) + (type-1|session)', 'DummyVarCoding', 'effects');
+            case 5
+                lme = fitlme(tbl, 'measure ~ type + (1|session) + (type-1|session) + (type|mouse)', 'DummyVarCoding', 'effects');
+            case 6
+                lme = fitlme(tbl, 'measure ~ type + (1|session) + (type-1|session) + (1|mouse)', 'DummyVarCoding', 'effects');
+            case 7
+                lme = fitlme(tbl, 'measure ~ type + (1|session) + (type-1|session) + (1|mouse) + (type-1|mouse)', 'DummyVarCoding', 'effects');
+        end
+        stats = anova(lme);
+        title(sprintf('p = %.4f (ANOVA)', stats.pValue(2)))
+        if stats.pValue(2) < 0.05
+            if length(cellTypes{t}) < 3
+                fprintf('Pairwise p-vlaues for %s between %s, %s:\n', ...
+                    measureNames{m}, typeNames{t}{:})
+                fprintf('%.2e\n', coefTest(lme,[0 1]))
+            else
+                fprintf('Pairwise p-vlaues for %s between %s, %s, %s:\n', ...
+                    measureNames{m}, typeNames{t}{:})
+                fprintf('  %.2e\n', coefTest(lme,[0 1 0]), ...
+                    coefTest(lme,[0 0 1]), coefTest(lme,[0 1 -1]))
+            end
+        end
     end
 end
