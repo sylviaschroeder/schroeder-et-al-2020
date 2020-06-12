@@ -6,6 +6,7 @@
 
 ## Code dependencies
 * [github.com/kwikteam/npy-matlab](https://github.com/kwikteam/npy-matlab)
+* [Circular Statistics Toolbox](https://uk.mathworks.com/matlabcentral/fileexchange/10676-circular-statistics-toolbox-directional-statistics)
 
 ## Description
 See Wiki
