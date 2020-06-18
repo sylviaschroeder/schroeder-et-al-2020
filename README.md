@@ -1,3 +1,4 @@
+
 # Code accompanying [Schröder et al. (2020)](https://www.cell.com/neuron/fulltext/S0896-6273(20)30318-4)
 
 * This repository will eventually contain the code to reproduce all figures from the published data and to analyse the published preprocessed data, but is currently still work in progress
@@ -7,6 +8,7 @@
 ## Code dependencies
 * [github.com/kwikteam/npy-matlab](https://github.com/kwikteam/npy-matlab)
 * [Circular Statistics Toolbox](https://uk.mathworks.com/matlabcentral/fileexchange/10676-circular-statistics-toolbox-directional-statistics)
+* [Spikes](https://github.com/cortex-lab/spikes)
 
 ## Description
 See Wiki

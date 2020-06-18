@@ -108,7 +108,6 @@ for subj = 1:length(subjDirs)
     dateDirs = dir(fullfile(folderBase, 'boutons', name, '2*'));
     for dt = 1:length(dateDirs)
         date = dateDirs(dt).name;
-        folder = fullfile(folderBase, 'boutons', name, date, '001');
         if ~isfile(fullfile(folderBase, 'boutons', name, ...
                 date, '001\_ss_rf.maps.npy'))
             continue
@@ -327,7 +326,6 @@ for subj = 1:length(subjDirs)
     dateDirs = dir(fullfile(folderBase, 'boutons', name, '2*'));
     for dt = 1:length(dateDirs)
         date = dateDirs(dt).name;
-        folder = fullfile(folderBase, 'boutons', name, date, '001');
         if ~isfile(fullfile(folderBase, 'boutons', name, ...
                 date, '001\_ss_tuning.parametersSmall.npy'))
             continue
