@@ -5,7 +5,6 @@ folderThisRepo = 'C:\dev\workspace\schroeder-et-al-2020';
 
 %% Parameters
 % Preprocess neural data
-smoothStd = 0.25; % in sec
 sigma = 1; % in sec
 
 %% Examples
