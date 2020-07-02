@@ -115,6 +115,7 @@ title(sprintf('n = %d', sum(validRF)))
 
 %% Prepare for Figs. 4C+D
 % Collect relevant variables from visual noise data
+numSh = 200;
 subjects = {};
 dates = {};
 planes = [];
@@ -123,7 +124,8 @@ prefDirs = [];
 minima = [];
 maxima = [];
 means = [];
-isTuned = [];
+nullMaxima = [];
+nullMeans = [];
 isSuppr = [];
 amplitudes = {};
 largePupil = {};
@@ -152,13 +154,20 @@ for subj = 1:length(subjDirs)
             date, '001\_ss_tuning.parametersSmall.npy'));
         parsL = readNPY(fullfile(folderBase, 'sc neurons 2p', name, ...
             date, '001\_ss_tuning.parametersLarge.npy'));
-        isT = [~isnan(parsS(:,2)), ~isnan(parsL(:,2))];
-        isTuned = [isTuned; all(isT,2)];
+        pars = cat(3, parsS, parsL);
         prefD = parsS(:,1);
-        prefD(~isT(:,1)) = NaN;
+        prefD(isnan(parsS(:,2))) = NaN;
         prefDirs = [prefDirs; prefD];
-        curves = readNPY(fullfile(folderBase, 'sc neurons 2p', name, ...
+        nullParsS = readNPY(fullfile(folderBase, 'sc neurons 2p', name, ...
+            date, '001\_ss_tuning.nullParametersSmall.npy'));
+        nullParsL = readNPY(fullfile(folderBase, 'sc neurons 2p', name, ...
+            date, '001\_ss_tuning.nullParametersLarge.npy'));
+        nullPars = cat(4, nullParsS, nullParsL);
+        curvesS = readNPY(fullfile(folderBase, 'sc neurons 2p', name, ...
             date, '001\_ss_tuning.curvesSmall.npy'));
+        curvesL = readNPY(fullfile(folderBase, 'sc neurons 2p', name, ...
+            date, '001\_ss_tuning.curvesLarge.npy'));
+        curves = cat(3, curvesS, curvesL);
         isSuppr = [isSuppr; readNPY(fullfile(folderBase, 'sc neurons 2p', name, ...
             date, '001\_ss_tuning.isSuppressed.npy'))];
         isGad = [isGad; readNPY(fullfile(folderBase, 'sc neurons 2p', name, ...
@@ -170,27 +179,49 @@ for subj = 1:length(subjDirs)
         largePupil = [largePupil; repmat({readNPY(fullfile(folderBase, 'sc neurons 2p', name, ...
             date, '001\_ss_gratingTrials.largePupil.npy'))}, n, 1)];
         
-        mi = NaN(n,1);
-        ma = NaN(n,1);
-        mn = NaN(n,1);
+        mi = NaN(n,2);
+        ma = NaN(n,2);
+        mn = NaN(n,2);
+        nma = NaN(n,2,numSh);
+        nmn = NaN(n,2,numSh);
         for iCell = 1:n
-            if isT(iCell,1) % tuned when pupil small
-                mn(iCell) = mean(curves(iCell,:));
-                oris = mod(prefD(iCell) + [0 90 180], 360);
-                respS = gratings.orituneWrappedConditions(parsS(iCell,:), oris);
-                ma(iCell) = respS(1);
-                if respS(1)-respS(2) < 0 % suppressed by gratings
-                    mi(iCell) = max(respS(2:3));
+            for cond = 1:2
+                if ~isnan(pars(iCell,2,cond)) % tuned
+                    pd = pars(iCell,1,cond);
+                    mn(iCell,cond) = mean(curves(iCell,:,cond));
+                    oris = mod(pd + [0 90 180], 360);
+                    resp = gratings.orituneWrappedConditions(pars(iCell,:,cond), oris);
+                    ma(iCell,cond) = resp(1);
+                    if resp(1)-resp(2) < 0 % suppressed by gratings
+                        [mi(iCell,cond),ind] = max(resp(2:3));
+                    else
+                        [mi(iCell,cond),ind] = min(resp(2:3));
+                    end
+                    ind = ind + 1;
+                    
+                    resp = NaN(numSh, 3);
+                    crv = NaN(numSh, 360);
+                    for sh = 1:numSh
+                        oris = mod(nullPars(iCell,1,sh,cond) + [0 90 180], 360);
+                        resp(sh,:) = gratings.orituneWrappedConditions( ...
+                            nullPars(iCell,:,sh,cond), oris);
+                        crv(sh,:) = gratings.orituneWrappedConditions(...
+                            nullPars(iCell,:,sh,cond), 1:360);
+                    end
+                    nmi(iCell,cond,:) = resp(:,ind);
+                    nma(iCell,cond,:) = resp(:,1);
+                    nmn(iCell,cond,:) = mean(crv,2);
                 else
-                    mi(iCell) = min(respS(2:3));
+                    mn(iCell,cond) = pars(iCell,1,cond);
+                    nmn(iCell,cond,:) = nullPars(iCell,1,:,cond);
                 end
-            else
-                mn(iCell) = parsS(iCell,1);
             end
         end
         minima = [minima; mi];
         maxima = [maxima; ma];
         means = [means; mn];
+        nullMaxima = [nullMaxima; nma];
+        nullMeans = [nullMeans; nmn];
     end
 end
 
@@ -257,11 +288,11 @@ cols = lines(4);
 xLim = [9 10];
 yLim = [3 5];
 
-mi = minima;
-ma = maxima;
+mi = minima(:,1);
+ma = maxima(:,1);
 j = isnan(mi); % not tuned when pupil small
-mi(j) = means(j);
-ma(j) = means(j);
+mi(j) = means(j,1);
+ma(j) = means(j,1);
 
 j = ma - mi < 0; % if suppressed by gratings, swap responses to preferred
                  % and non-preferred stimulus because response to pref is
@@ -273,7 +304,7 @@ b_mi = [-flip(2.^(-3:xLim(1))), 0, 2.^(-3:xLim(2))];
 b_ma = [-flip(2.^(-3:yLim(1))), 0, 2.^(-3:yLim(2))];
 
 groups = [isGad == -1, isGad == 1];
-
+isTuned = ~any(isnan(maxima),2);
 for g = 1:2
     figure
     N1 = histcounts(ma(isTuned==1 & groups(:,g)), b_ma);
@@ -301,7 +332,7 @@ for g = 1:2
     end
     ylim([0 max(N1+N2)*1.1])
     xlabel('Maximum')
-    ylabel('#sc neurons 2p')
+    ylabel('#Neurons')
     title(sprintf('n = %d', sum(N1 + N2)))
     set(gca,'XTick',[1 4 8 12 15 17],'XTickLabel',b_ma([1 4 8 12 15 17]),'box','off')
     if g == 1
@@ -462,3 +493,334 @@ linkaxes(ax,'x')
 xlim(time([centerIndex+1 end]))
 xlabel('Time (s)')
 set(gca,'box','off')
+
+%% Figure 4F (example tuning curves, small and large pupil)
+cols = 'kr';
+for ex = 1:size(examplesTun,1)
+    planes = readNPY(fullfile(folderBase, 'sc neurons 2p', examplesTun{ex,1}, ...
+        examplesTun{ex,2}, '001\_ss_2pRois._ss_2pPlanes.npy'));
+    ids = readNPY(fullfile(folderBase, 'sc neurons 2p', examplesTun{ex,1}, ...
+        examplesTun{ex,2}, '001\_ss_2pRois.ids.npy'));
+    directions = readNPY(fullfile(folderBase, 'sc neurons 2p', examplesTun{ex,1}, ...
+        examplesTun{ex,2}, '001\_ss_gratingID.directions.npy'));
+    largePupil = readNPY(fullfile(folderBase, 'sc neurons 2p', examplesTun{ex,1}, ...
+        examplesTun{ex,2}, '001\_ss_gratingTrials.largePupil.npy'));
+    curvesSmall = readNPY(fullfile(folderBase, 'sc neurons 2p', examplesTun{ex,1}, ...
+        examplesTun{ex,2}, '001\_ss_tuning.curvesSmall.npy'));
+    curvesLarge = readNPY(fullfile(folderBase, 'sc neurons 2p', examplesTun{ex,1}, ...
+        examplesTun{ex,2}, '001\_ss_tuning.curvesLarge.npy'));
+    curves = cat(3, curvesSmall, curvesLarge);
+    amplitudes = readNPY(fullfile(folderBase, 'sc neurons 2p', examplesTun{ex,1}, ...
+        examplesTun{ex,2}, '001\_ss_gratingTrials.amplitudes.npy'));
+    
+    cellID = examplesTun{ex,3}==planes & examplesTun{ex,4}==ids;
+    directions(isnan(directions)) = [];
+    
+    figure
+    hold on
+    for cond = 1:2
+        amps = amplitudes(:,:,cellID);
+        if cond == 1
+            ind = largePupil;
+        else
+            ind = ~largePupil;
+        end
+        amps(ind) = NaN;
+        plot(1:360, curves(cellID,:,cond), 'Color', cols(cond), 'LineWidth',2);
+        m = nanmean(amps,2);
+        s = nanstd(amps,0,2) ./ sqrt(sum(~ind,2));
+        errorbar([directions; 360], m([1:end 1]), s([1:end 1]), 'o', ...
+            'Color', cols(cond), 'CapSize', 2, 'MarkerFaceColor', cols(cond))
+    end
+    plot([0 360], [0 0], 'k:', 'LineWidth', 2)
+    set(gca,'XTick',0:90:360)
+    title(sprintf('Example %d',ex))
+    xlim([0 360])
+    xlabel('Direction (in degrees)')
+    ylabel('\DeltaF/F')
+end
+
+%% Figure 4G (correlations with pupil during gratings)
+% Collect data for SC neurons
+subjects = {};
+dates = {};
+planes = [];
+ids = [];
+rhosNeurons = [];
+nullsNeurons = [];
+subjDirs = dir(fullfile(folderBase, 'sc neurons 2p', 'SS*'));
+for subj = 1:length(subjDirs)
+    name = subjDirs(subj).name;
+    dateDirs = dir(fullfile(folderBase, 'sc neurons 2p', name, '2*'));
+    for dt = 1:length(dateDirs)
+        date = dateDirs(dt).name;
+        
+        if ~isfile(fullfile(folderBase, 'sc neurons 2p', name, ...
+                date, '001\_ss_corrsPupil.rhosGratings.npy'))
+            continue
+        end
+        
+        p = readNPY(fullfile(folderBase, 'sc neurons 2p', name, ...
+            date, '001\_ss_2pRois._ss_2pPlanes.npy'));
+        n = length(p);
+        planes = [planes; p];
+        ids = [ids; readNPY(fullfile(folderBase, 'sc neurons 2p', name, ...
+            date, '001\_ss_2pRois.ids.npy'))];
+        subjects = [subjects; repmat({name}, n, 1)];
+        dates = [dates; repmat({date}, n, 1)];
+        
+        rho = readNPY(fullfile(folderBase, 'sc neurons 2p', name, ...
+            date, '001\_ss_corrsPupil.rhosGratings.npy'));
+        null = readNPY(fullfile(folderBase, 'sc neurons 2p', name, ...
+            date, '001\_ss_corrsPupil.nullRhosGratings.npy'));
+        rhosNeurons = [rhosNeurons; rho];
+        nullsNeurons = [nullsNeurons; null];
+    end
+end
+pVals = sum(nullsNeurons < rhosNeurons, 2) ./ size(nullsNeurons, 2);
+ind = pVals > 0.5;
+pVals(ind) = 1 - pVals(ind);
+pVals = 2 .* pVals; % two-sided test
+pVals(pVals==0) = 1/size(nullsNeurons,2);
+
+% Collect data for retinal boutons
+rhosBoutons = [];
+subjDirs = dir(fullfile(folderBase, 'boutons', 'SS*'));
+for subj = 1:length(subjDirs)
+    name = subjDirs(subj).name;
+    dateDirs = dir(fullfile(folderBase, 'boutons', name, '2*'));
+    for dt = 1:length(dateDirs)
+        date = dateDirs(dt).name;
+        if ~isfile(fullfile(folderBase, 'boutons', name, ...
+                date, '001\_ss_corrsPupil.rhosGratings.npy'))
+            continue
+        end        
+        rho = readNPY(fullfile(folderBase, 'boutons', name, ...
+            date, '001\_ss_corrsPupil.rhosGratings.npy'));
+        rhosBoutons = [rhosBoutons; rho];
+    end
+end
+
+% Make plots
+% Histogram
+edges = -0.55 : 0.1 : 0.55;
+bins = edges(2:end)-0.05;
+valid = ~isnan(rhosNeurons);
+n1 = histcounts(rhosNeurons(pVals<0.05 & valid),edges)';
+n2 = histcounts(rhosNeurons(pVals>=0.05 & valid),edges)';
+figure;
+b = bar(bins, [n1,n2], 'stacked');
+b(1).FaceColor = 'k';
+b(2).FaceColor = 'w';
+xlabel(sprintf('Correlation with pupil'))
+ylabel('#Neurons')
+xlim(edges([1 end]))
+ax = gca;
+ax.Box = 'off';
+legend('p < 0.05', 'p \geq 0.05')
+title(sprintf('n = %d', sum(n1+n2)))
+
+% Cumulative plot
+ind = isnan(rhosNeurons);
+rhos = rhosNeurons;
+rhos(ind) = [];
+x = sort(rhos, 'ascend');
+y = (1:length(x))' ./ length(x);
+x = [-1; x; 1];
+y = [0; y; 1];
+nulls = nullsNeurons;
+nulls(ind,:) = [];
+xNull = sort(nulls, 1, 'ascend');
+xNull = sort(xNull, 2, 'ascend');
+limNull = prctile(xNull, [2.5 97.5], 2);
+limNull = [[-1 -1]; limNull; [1 1]];
+yNull = (1:length(x))' ./ (length(x));
+
+ind = isnan(rhosBoutons);
+rhosB = rhosBoutons;
+rhosB(ind) = [];
+xB = sort(rhosB, 'ascend');
+yB = (1:length(xB))' ./ length(xB);
+xB = [-1; xB; 1];
+yB = [0; yB; 1];
+
+rhosEx = NaN(size(examplesCorr,1),1);
+for ex = 1:size(examplesCorr,1)
+    idx = strcmp(subjects, examplesCorr{ex,1}) & ...
+        strcmp(dates, examplesCorr{ex,2}) & planes == examplesCorr{ex,3} & ...
+        ids == examplesCorr{ex,4};
+    rhosEx(ex) = rhosNeurons(idx);
+end
+
+cols = 'rb';
+figure
+plot([0 0], [0 1], 'k')
+hold on
+h = [0 0 0];
+h(3) = plot(xB, yB, 'Color', [.65,.16,.16], 'LineWidth', 2);
+h(2) = fill([limNull(:,1);flip(limNull(:,2))], [yNull; flip(yNull)], ...
+    'k', 'EdgeColor', 'none', 'FaceColor', 'k', 'FaceAlpha', 0.2);
+h(1) = plot(x, y, 'k', 'LineWidth', 2);
+heights = interp1(x, y, rhosEx);
+for ex = 1:length(rhosEx)
+    plot(rhosEx(ex), heights(ex), 'o', 'MarkerEdgeColor', 'none', ...
+        'MarkerFaceColor', cols(ex))
+end
+xlim([-0.55 0.55])
+xlabel('Correlation with pupil')
+ylabel('Proportion of neurons')
+legend(h, {'sSC neurons','shifted','boutons'}, 'Location', 'NorthWest')
+legend('boxoff')
+set(gca, 'XTick', [-.5 0 .5], 'box', 'off');
+
+%% Figure 4H (response modulations)
+modFun = @(a,b) (b-a)./((abs(a)+abs(b)) ./ 2) .* 100;
+
+% invert sign of responses of suppressed cells
+minima(isSuppr==1,:) = -minima(isSuppr==1,:);
+maxima(isSuppr==1,:) = -maxima(isSuppr==1,:);
+means(isSuppr==1,:) = -means(isSuppr==1,:);
+nullMaxima(isSuppr==1,:,:) = -nullMaxima(isSuppr==1,:,:);
+nullMeans(isSuppr==1,:,:) = -nullMeans(isSuppr==1,:,:);
+
+mx = maxima;
+ind = all(isnan(maxima),2);
+mx(ind,:) = means(ind,:);
+nmx = nullMaxima;
+nmx(ind,:,:) = nullMeans(ind,:,:);
+respMod = modFun(mx(:,1), mx(:,2));
+nullMod = modFun(squeeze(nmx(:,1,:)), squeeze(nmx(:,2,:)));
+confInt = prctile(nullMod, [2.5 97.5], 2);
+sgnfcnt = respMod < confInt(:,1) | respMod > confInt(:,2);
+
+% collect data for retinal boutons
+maximaB = [];
+meansB = [];
+isSupprB = [];
+subjDirs = dir(fullfile(folderBase, 'boutons', 'SS*'));
+for subj = 1:length(subjDirs)
+    name = subjDirs(subj).name;
+    dateDirs = dir(fullfile(folderBase, 'boutons', name, '2*'));
+    for dt = 1:length(dateDirs)
+        date = dateDirs(dt).name;
+        if ~isfile(fullfile(folderBase, 'boutons', name, ...
+                date, '001\_ss_tuning.parametersSmall.npy'))
+            continue
+        end
+        parsS = readNPY(fullfile(folderBase, 'boutons', name, ...
+            date, '001\_ss_tuning.parametersSmall.npy'));
+        parsL = readNPY(fullfile(folderBase, 'boutons', name, ...
+            date, '001\_ss_tuning.parametersLarge.npy'));
+        pars = cat(3, parsS, parsL);
+        curvesS = readNPY(fullfile(folderBase, 'boutons', name, ...
+            date, '001\_ss_tuning.curvesSmall.npy'));
+        curvesL = readNPY(fullfile(folderBase, 'boutons', name, ...
+            date, '001\_ss_tuning.curvesLarge.npy'));
+        curves = cat(3, curvesS, curvesL);
+        isSupprB = [isSupprB; readNPY(fullfile(folderBase, 'boutons', name, ...
+            date, '001\_ss_tuning.isSuppressed.npy'))];
+        n = size(parsS,1);
+        
+        ma = NaN(n,2);
+        mn = NaN(n,2);
+        for iCell = 1:n
+            for cond = 1:2
+                if ~isnan(pars(iCell,2,cond)) % tuned
+                    pd = pars(iCell,1,cond);
+                    mn(iCell,cond) = mean(curves(iCell,:,cond));
+                    oris = mod(pd + [0 90 180], 360);
+                    resp = gratings.orituneWrappedConditions(pars(iCell,:,cond), oris);
+                    ma(iCell,cond) = resp(1);
+                else
+                    mn(iCell,cond) = pars(iCell,1,cond);
+                end
+            end
+        end
+        maximaB = [maximaB; ma];
+        meansB = [meansB; mn];
+    end
+end
+maximaB(isSupprB==1,:) = -maximaB(isSupprB==1,:);
+meansB(isSupprB==1,:) = -meansB(isSupprB==1,:);
+mx = maximaB;
+ind = all(isnan(maximaB),2);
+mx(ind,:) = meansB(ind,:);
+respModB = modFun(mx(:,1), mx(:,2));
+
+% Histogram
+cols = lines(4);
+binSize = 20;
+mini = -80;
+maxi = 80;
+figure
+bins = mini:binSize:maxi;
+edges = [bins-binSize/2, maxi+binSize/2];
+n1 = histcounts(respMod(sgnfcnt), edges);
+n2 = histcounts(respMod(~sgnfcnt), edges);
+b = bar(bins, [n1',n2'], 'stacked');
+b(1).FaceColor = 'k';
+b(2).FaceColor = 'w';
+hold on
+plot(nanmean(respMod(sgnfcnt & respMod<0)), 700, 'vk', 'MarkerFaceColor', 'k')
+plot(nanmean(respMod(sgnfcnt & respMod>0)), 700, 'vk', 'MarkerFaceColor', 'k')
+xlim(edges([1 end]))
+title(sprintf('n = %d', sum(~isnan(respMod))))
+xlabel('Response modulation (%)')
+ylabel('#Neurons')
+legend(b, 'p < 0.05', 'p \geq 0.05', 'Location', 'NorthWest')
+ax = gca;
+ax.Box = 'off';
+ax.XTick = [mini 0 maxi];
+
+% cumulative distribution
+ind = ~isnan(respMod);
+x = sort(respMod(ind), 'ascend');
+y = (1:sum(ind)) ./ sum(ind);
+x = [-200; x; 200];
+y = [0 y 1];
+pseudo = nullMod;
+pseudo(~ind,:) = [];
+xNull = sort(pseudo, 1, 'ascend');
+xNull = sort(xNull, 2, 'ascend');
+limNull = prctile(xNull, [2.5 97.5], 2);
+limNull = [[-1 -1]; limNull; [1 1]];
+yNull = (1:length(x)) ./ length(x);
+ind = ~isnan(respModB);
+xB = sort(respModB(ind), 'ascend');
+yB = (1:sum(ind)) ./ sum(ind);
+xB = [-200; xB; 200];
+yB = [0 yB 1];
+
+figure
+plot([0 0], [0 1], 'k')
+hold on
+h = [0 0 0];
+h(3) = plot(xB, yB, 'Color', [.65,.16,.16], 'LineWidth', 2);
+h(2) = fill([limNull(:,1);flip(limNull(:,2))], [yNull, flip(yNull)], ...
+    'k', 'EdgeColor', 'none', 'FaceColor', 'k', 'FaceAlpha', 0.2);
+h(1) = plot(x, y, 'k', 'LineWidth', 2);
+[xUni, ind] = unique(x);
+yUni = y(ind);
+for ex = 1:size(examplesTun,1)
+    idx = strcmp(subjects, examplesTun{ex,1}) & ...
+        strcmp(dates, examplesTun{ex,2}) & planes == examplesTun{ex,3} & ...
+        ids == examplesTun{ex,4};
+    md = respMod(idx);
+    if md < edges(1)
+        md = edges(1);
+    end
+    height = interp1(xUni, yUni, md);
+    if sgnfcnt(idx)
+        plot(md, height, 'o', 'MarkerEdgeColor', cols(ex,:), ...
+            'MarkerFaceColor', cols(ex,:), 'LineWidth', 2)
+    else
+        plot(md, height, 'o', 'MarkerEdgeColor', cols(ex,:), 'LineWidth', 2)
+    end
+end
+xlim(edges([1 end]))
+xlabel('Response modulation (%)')
+ylabel('Proportion of neurons')
+title(sprintf('n = %d', sum(~isnan(respMod))))
+legend(h, {'sSC neurons','shifted','boutons'}, 'Location', 'NorthWest')
+legend('boxoff')
+set(gca, 'XTick', [mini 0 maxi], 'box', 'off');

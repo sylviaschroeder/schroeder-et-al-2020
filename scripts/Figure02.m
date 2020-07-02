@@ -263,6 +263,7 @@ end
 
 cols = 'rb';
 figure
+plot([0 0], [0 1], 'k')
 hold on
 h = [0 0];
 h(2) = fill([limNull(:,1);flip(limNull(:,2))], [yNull; flip(yNull)], ...
@@ -278,6 +279,8 @@ xlabel('Correlation with running')
 ylabel('Proportion of boutons')
 title(sprintf('Darkness (n = %d)', length(rhos)))
 legend(h, {'boutons','shifted'}, 'Location', 'NorthWest')
+legend('boxoff')
+set(gca, 'XTick', [-.5 0 .5], 'box', 'off');
 
 %% Figure 2D (correlations with running during gratings)
 ind = isnan(rhosRunGratings);
@@ -309,6 +312,7 @@ end
 
 cols = 'rb';
 figure
+plot([0 0], [0 1], 'k')
 hold on
 h = [0 0];
 h(2) = fill([limNull(:,1);flip(limNull(:,2))], [yNull; flip(yNull)], ...
@@ -324,6 +328,8 @@ xlabel('Correlation with running')
 ylabel('Proportion of boutons')
 title(sprintf('Gratings (n = %d)', length(rhos)))
 legend(h, {'boutons','shifted'}, 'Location', 'NorthWest')
+legend('boxoff')
+set(gca, 'XTick', [-.5 0 .5], 'box', 'off');
 
 %% Figure 2E (scatterplot: correlations with running during darkness vs during gratings)
 % Scatter plot
@@ -408,6 +414,7 @@ end
 
 cols = 'rb';
 figure
+plot([0 0], [0 1], 'k')
 hold on
 h = [0 0];
 h(2) = fill([limNull(:,1);flip(limNull(:,2))], [yNull; flip(yNull)], ...
@@ -423,6 +430,8 @@ xlabel('Correlation with pupil')
 ylabel('Proportion of boutons')
 title(sprintf('Gratings (n = %d)', length(rhos)))
 legend(h, {'boutons','shifted'}, 'Location', 'NorthWest')
+legend('boxoff')
+set(gca, 'XTick', [-.5 0 .5], 'box', 'off');
 
 %% Figure 2G (example tuning curves, small and large pupil)
 cols = 'kr';
