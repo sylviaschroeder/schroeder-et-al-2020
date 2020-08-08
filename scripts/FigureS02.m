@@ -633,7 +633,7 @@ axis([0 360 0 360])
 set(gca, 'XTick', 0:90:360, 'YTick', 0:90:360)
 xlabel('Preferred orientation (small pupil)')
 ylabel('Preferred orientation (large pupil)')
-title(sprintf('n = %d (p < %.1e, circular paired t-test)', sum(ind), p))
+title(sprintf('n = %d (mean diff.s = 0, p < %.1e, circular paired t-test)', sum(ind), p))
 
 %% Figure S2G (scatter: preferred direction vs response modulation)
 binSize = 90;
@@ -768,11 +768,11 @@ xlim(edges([1 end]))
 xlabel('Tuning depth modulation (%)')
 ylabel('Proportion of boutons')
 title(sprintf('n = %d', sum(~isnan(depthMod))))
-legend(h, {'boutons','shifted'}, 'Location', 'NorthWest')
+legend(h, {'boutons','permuted'}, 'Location', 'NorthWest')
 legend('boxoff')
 set(gca, 'XTick', [mini 0 maxi]);
 
-%% Figure S2J-M
+%% Figure S2J-M (distributions of correlations and tuning modulations for different cell types)
 measures = [rhosRunDark, rhosPupilGratings, respMod, depthMod];
 nullMeasures = {nullsRunDark, nullsPupilGratings, nullRespMod, nullDepthMod};
 measureNames = {'Correlation with running','Correlation with pupil', ...

@@ -201,7 +201,7 @@ ylabel('Proportion of boutons')
 
 %% Figure S1D (ON/OFF index for boutons driven and suppressed by gratings)
 % Note: due to bug in code used for paper, there are small discrapencies
-% between paper figure and figure here
+% between paper figure and figure here (results don't change qualitatively)
 groups = validRF & [isSuppr == -1, isSuppr == 1];
 groupNames = {sprintf('driven (%d)', sum(groups(:,1) & ~isnan(OnOffRatios))), ...
     sprintf('suppressed (%d)', sum(groups(:,2) & ~isnan(OnOffRatios)))};
@@ -236,8 +236,6 @@ ylabel('Proportion of boutons')
 title(sprintf('p = %.4f', coefTest(lme)))
 
 %% Figure S1E (DSI for ON, OFF and ON+OFF boutons)
-% Note: due to bug in code used for paper, there are small discrapencies
-% between paper figure and figure here
 groups = [validRF & OnOffRatios>onThr, ...
     validRF & OnOffRatios<offThr, ...
     validRF & OnOffRatios<=onThr & OnOffRatios>=offThr];
@@ -299,8 +297,6 @@ annotation('textbox', [0.5 0.3 0.4 0.2], 'String', text, ...
     'LineStyle', 'none')
 
 %% Figure S1F (OSI for ON, OFF and ON+OFF boutons)
-% Note: due to bug in code used for paper, there are small discrapencies
-% between paper figure and figure here
 groups = [validRF & OnOffRatios>onThr, ...
     validRF & OnOffRatios<offThr, ...
     validRF & OnOffRatios<=onThr & OnOffRatios>=offThr];
