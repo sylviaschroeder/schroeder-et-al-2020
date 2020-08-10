@@ -23,6 +23,7 @@ examplesTun = {'SS038', '2015-02-17', 1, 227; ...
                'SS038', '2015-02-17', 1, 203};
 examplesCorr = {'SS047', '2015-11-23', 1, 153; ...
                 'SS047', '2015-11-23', 1, 171};
+exampleEphys = {'SS061', '2016-05-11', 398};
 
 %% Add paths
 addpath(genpath(fullfile(folderTools, 'npy-matlab')))
@@ -113,7 +114,7 @@ xlabel('ON/OFF index')
 ylabel('#sc neurons 2p')
 title(sprintf('n = %d', sum(validRF)))
 
-%% Prepare for Figs. 4C+D
+%% Prepare for Figs. 4C+D+H
 % Collect relevant variables from visual noise data
 numSh = 200;
 subjects = {};
@@ -824,3 +825,302 @@ title(sprintf('n = %d', sum(~isnan(respMod))))
 legend(h, {'sSC neurons','shifted','boutons'}, 'Location', 'NorthWest')
 legend('boxoff')
 set(gca, 'XTick', [mini 0 maxi], 'box', 'off');
+
+%% Figure 4I (ephys: example tuning curves, small/large pupil, with/without laser)
+cols = 'kr';
+
+ids = readmatrix(fullfile(folderBase, 'sc neurons ephys', exampleEphys{1}, ...
+    exampleEphys{2}, '001\clusters.uuids.csv'));
+directions = readNPY(fullfile(folderBase, 'sc neurons ephys', exampleEphys{1}, ...
+    exampleEphys{2}, '001\_ss_gratingID.directions.npy'));
+laserOn = readNPY(fullfile(folderBase, 'sc neurons ephys', exampleEphys{1}, ...
+    exampleEphys{2}, '001\_ss_gratingID.laserOn.npy'));
+largePupil = readNPY(fullfile(folderBase, 'sc neurons ephys', exampleEphys{1}, ...
+    exampleEphys{2}, '001\_ss_gratingTrials.largePupil.npy'));
+curvesSmallLaserOff = readNPY(fullfile(folderBase, 'sc neurons ephys', exampleEphys{1}, ...
+    exampleEphys{2}, '001\_ss_tuning.curvesSmallLaserOff.npy'));
+curvesLargeLaserOff = readNPY(fullfile(folderBase, 'sc neurons ephys', exampleEphys{1}, ...
+    exampleEphys{2}, '001\_ss_tuning.curvesLargeLaserOff.npy'));
+curvesSmallLaserOn = readNPY(fullfile(folderBase, 'sc neurons ephys', exampleEphys{1}, ...
+    exampleEphys{2}, '001\_ss_tuning.curvesSmallLaserOn.npy'));
+curvesLargeLaserOn = readNPY(fullfile(folderBase, 'sc neurons ephys', exampleEphys{1}, ...
+    exampleEphys{2}, '001\_ss_tuning.curvesLargeLaserOn.npy'));
+curves = cat(3, curvesSmallLaserOff, curvesLargeLaserOff, ...
+    curvesSmallLaserOn, curvesLargeLaserOn);
+amplitudes = readNPY(fullfile(folderBase, 'sc neurons ephys', exampleEphys{1}, ...
+    exampleEphys{2}, '001\_ss_gratingTrials.amplitudes.npy'));
+    
+cellID = exampleEphys{3}==ids;
+laserConds = [false false; true true];
+pupilConds = [false true; false true];
+ttls = {'Control', 'V1 inactivated'};
+for ls = 1:2
+    figure
+    hold on
+    for cond = 1:2
+        amps = amplitudes(:,:,cellID);
+        ind = largePupil==pupilConds(ls,cond) & laserOn==laserConds(ls,cond);
+        amps(~ind) = NaN;
+        plot(1:360, curves(cellID,:,(ls-1)*2+cond), 'Color', cols(cond), 'LineWidth',2);
+        ind2 = ~all(isnan(amps),2) & ~isnan(directions);
+        m = nanmean(amps(ind2,:),2);
+        s = nanstd(amps(ind2,:),0,2) ./ sqrt(sum(ind(ind2,:),2));
+        errorbar([directions(ind2); 360], m([1:end 1]), s([1:end 1]), 'o', ...
+            'Color', cols(cond), 'CapSize', 2, 'MarkerFaceColor', cols(cond))
+        plot([0 360], [1 1].*nanmean(amps(~all(isnan(amps),2) & ...
+            isnan(directions),:),2), ['--' cols(cond)], 'LineWidth', 2)
+    end
+    set(gca,'XTick',0:90:360)
+    title(ttls{ls})
+    xlim([0 360])
+    ylim([-3 35])
+    xlabel('Direction (in degrees)')
+    ylabel('Firing rate (spikes/s)')
+end
+
+%% Prepare for Figs. J+K
+numSh = 200;
+subjects = {};
+dates = {};
+ids = [];
+minima = [];
+maxima = [];
+means = [];
+nullBehMinima = [];
+nullBehMaxima = [];
+nullBehMeans = [];
+nullLaserMinima = [];
+nullLaserMaxima = [];
+nullLaserMeans = [];
+isSuppr = [];
+
+subjDirs = dir(fullfile(folderBase, 'sc neurons ephys'));
+for subj = 1:length(subjDirs)
+    name = subjDirs(subj).name;
+    if ~subjDirs(subj).isdir || any(strcmp(name, {'.','..'}))
+        continue
+    end
+    dateDirs = dir(fullfile(folderBase, 'sc neurons ephys', name, '2*'));
+    for dt = 1:length(dateDirs)
+        date = dateDirs(dt).name;
+        c = readmatrix(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\clusters.uuids.csv'));
+        n = length(c);
+        ids = [ids; c];
+        subjects = [subjects; repmat({name}, n, 1)];
+        dates = [dates; repmat({date}, n, 1)];
+        
+        parsSOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.parametersSmallLaserOff.npy'));
+        parsLOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.parametersLargeLaserOff.npy'));
+        parsSOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.parametersSmallLaserOn.npy'));
+        parsLOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.parametersLargeLaserOn.npy'));
+        pars = cat(3, parsSOff, parsLOff, parsSOn, parsLOn);
+        cSOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.curvesSmallLaserOff.npy'));
+        cLOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.curvesLargeLaserOff.npy'));
+        cSOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.curvesSmallLaserOn.npy'));
+        cLOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.curvesLargeLaserOn.npy'));
+        curves = cat(3, cSOff, cLOff, cSOn, cLOn);
+        nbSOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullBehaviourParametersSmallLaserOff.npy'));
+        nbLOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullBehaviourParametersLargeLaserOff.npy'));
+        nbSOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullBehaviourParametersSmallLaserOn.npy'));
+        nbLOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullBehaviourParametersLargeLaserOn.npy'));
+        nbPars = cat(4, nbSOff, nbLOff, nbSOn, nbLOn);
+        nlSOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullLaserParametersSmallLaserOff.npy'));
+        nlLOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullLaserParametersLargeLaserOff.npy'));
+        nlSOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullLaserParametersSmallLaserOn.npy'));
+        nlLOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullLaserParametersLargeLaserOn.npy'));
+        nlPars = cat(4, nlSOff, nlLOff, nlSOn, nlLOn);
+        isSuppr = [isSuppr; readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.isSuppressed.npy'))];
+        
+        mi = NaN(n,4);
+        ma = NaN(n,4);
+        mn = NaN(n,4);
+        nbmi = NaN(n,4,numSh);
+        nbma = NaN(n,4,numSh);
+        nbmn = NaN(n,4,numSh);
+        nlmi = NaN(n,4,numSh);
+        nlma = NaN(n,4,numSh);
+        nlmn = NaN(n,4,numSh);
+        for iCell = 1:n
+            for cond = 1:4
+                if ~isnan(pars(iCell,2,cond)) % tuned
+                    pd = pars(iCell,1,cond);
+                    mn(iCell,cond) = mean(curves(iCell,:,cond));
+                    oris = mod(pd + [0 90 180], 360);
+                    resp = gratings.orituneWrappedConditions(pars(iCell,:,cond), oris);
+                    ma(iCell,cond) = resp(1);
+                    if resp(1)-resp(2) < 0 % suppressed by gratings
+                        [mi(iCell,cond),ind] = max(resp(2:3));
+                    else
+                        [mi(iCell,cond),ind] = min(resp(2:3));
+                    end
+                    ind = ind + 1;
+                    
+                    respB = NaN(numSh, 3);
+                    crvB = NaN(numSh, 360);
+                    respL = NaN(numSh, 3);
+                    crvL = NaN(numSh, 360);
+                    for sh = 1:numSh
+                        oris = mod(nbPars(iCell,1,sh,cond) + [0 90 180], 360);
+                        respB(sh,:) = gratings.orituneWrappedConditions( ...
+                            nbPars(iCell,:,sh,cond), oris);
+                        crvB(sh,:) = gratings.orituneWrappedConditions(...
+                            nbPars(iCell,:,sh,cond), 1:360);
+                        oris = mod(nlPars(iCell,1,sh,cond) + [0 90 180], 360);
+                        respL(sh,:) = gratings.orituneWrappedConditions( ...
+                            nlPars(iCell,:,sh,cond), oris);
+                        crvL(sh,:) = gratings.orituneWrappedConditions(...
+                            nlPars(iCell,:,sh,cond), 1:360);
+                    end
+                    nbmi(iCell,cond,:) = respB(:,ind);
+                    nbma(iCell,cond,:) = respB(:,1);
+                    nbmn(iCell,cond,:) = mean(crvB,2);
+                    nlmi(iCell,cond,:) = respL(:,ind);
+                    nlma(iCell,cond,:) = respL(:,1);
+                    nlmn(iCell,cond,:) = mean(crvL,2);
+                else
+                    mn(iCell,cond) = pars(iCell,1,cond);
+                    nbmn(iCell,cond,:) = nbPars(iCell,1,:,cond);
+                    nlmn(iCell,cond,:) = nlPars(iCell,1,:,cond);
+                end
+            end
+        end
+        minima = [minima; mi];
+        maxima = [maxima; ma];
+        means = [means; mn];
+        nullBehMinima = [nullBehMinima; nbmi];
+        nullBehMaxima = [nullBehMaxima; nbma];
+        nullBehMeans = [nullBehMeans; nbmn];
+        nullLaserMinima = [nullLaserMinima; nlmi];
+        nullLaserMaxima = [nullLaserMaxima; nlma];
+        nullLaserMeans = [nullLaserMeans; nlmn];
+    end
+end
+
+% for untuned neurons, set maxima to mean responses
+isTuned = ~isnan(maxima(:,1));
+maxima(~isTuned,:) = means(~isTuned,:);
+nullBehMaxima(~isTuned,:,:) = nullBehMeans(~isTuned,:,:);
+nullLaserMaxima(~isTuned,:,:) = nullLaserMeans(~isTuned,:,:);
+
+modFun = @(a,b) (b-a)./((abs(a)+abs(b)) ./ 2) .* 100;
+
+% response modulation during control and V1 inactivation
+diffOff = modFun(maxima(:,1), maxima(:,2));
+diffOn = modFun(maxima(:,3), maxima(:,4));
+validUnits = ~isnan(diffOff) & ~isnan(diffOn);
+% response modulation during control and V1 inactivation for surrogate data
+% where label of pupil size has been randomised
+pseudoBehOff = modFun(squeeze(nullBehMaxima(:,1,:)), squeeze(nullBehMaxima(:,2,:)));
+pseudoBehOn = modFun(squeeze(nullBehMaxima(:,3,:)), squeeze(nullBehMaxima(:,4,:)));
+% response modulation during control and V1 inactivation for surrogate data
+% where label of laser on/off has been randomised
+pseudoLaserOff = modFun(squeeze(nullLaserMaxima(:,1,:)), squeeze(nullLaserMaxima(:,2,:)));
+pseudoLaserOn = modFun(squeeze(nullLaserMaxima(:,3,:)), squeeze(nullLaserMaxima(:,4,:)));
+
+% for suppressed units, change sign of response modulations so that
+% a more negative response with arousal results in a positive DI
+diffOff(isSuppr==1) = -diffOff(isSuppr==1);
+diffOn(isSuppr==1) = -diffOn(isSuppr==1);
+pseudoBehOff(isSuppr==1,:) = -pseudoBehOff(isSuppr==1,:);
+pseudoBehOn(isSuppr==1,:) = -pseudoBehOn(isSuppr==1,:);
+pseudoLaserOff(isSuppr==1,:) = -pseudoLaserOff(isSuppr==1,:);
+pseudoLaserOn(isSuppr==1,:) = -pseudoLaserOn(isSuppr==1,:);
+
+% significance of response modulation during control condition (using
+% surrogate data where pupil size label was randomised)
+confIntBehOff = prctile(pseudoBehOff, [2.5 97.5], 2);
+signBehOff = diffOff < confIntBehOff(:,1) | diffOff > confIntBehOff(:,2);
+% significance of response modulation during V1 inactivation (using
+% surrogate data where pupil size label was randomised)
+confIntBehOn = prctile(pseudoBehOn, [2.5 97.5], 2);
+signBehOn = diffOn < confIntBehOn(:,1) | diffOn > confIntBehOn(:,2);
+
+% difference between response modulation during control vs V1 inactivation
+% + significance of the difference (using surrogate data where laser label
+% has been randomised)
+diffs = diffOn - diffOff;
+pseudoDiffsLaser = pseudoLaserOn - pseudoLaserOff;
+confIntLaser = prctile(pseudoDiffsLaser, [2.5 97.5], 2);
+signLaser = diffs < confIntLaser(:,1) | diffs > confIntLaser(:,2);
+
+%% Figure 4J (ephys: response modulation histograms)
+binSizes = 20;
+bins = -200 : binSizes : 200;
+
+% histogram for laser off condition
+figure
+n1 = hist(diffOff(signBehOff & validUnits), bins);
+n2 = hist(diffOff(~signBehOff & validUnits), bins);
+b = bar(bins, [n1',n2'], 'stacked');
+b(1).FaceColor = 'k';
+b(2).FaceColor = 'w';
+xlim([-210 210])
+ylim([0 70])
+title(sprintf('Control (n = %d)', sum(validUnits)))
+xlabel('Response modulation (%)')
+ylabel('#Neurons')
+set(gca, 'box', 'off', 'XTick', [-200 0 200])
+
+% histogram for laser on condition
+figure
+n1 = hist(diffOn(signBehOn & validUnits), bins);
+n2 = hist(diffOn(~signBehOn & validUnits), bins);
+b = bar(bins, [n1',n2'], 'stacked');
+b(1).FaceColor = 'k';
+b(2).FaceColor = 'w';
+xlim([-210 210])
+ylim([0 70])
+title(sprintf('V1 inactivated (n = %d)', sum(validUnits)))
+xlabel('Response modulation (%)')
+ylabel('#Neurons')
+set(gca, 'box', 'off', 'XTick', [-200 0 200])
+    
+%% Figure 4K (ephys: scatter of response modulation during control vs V1 inactivation)
+
+n = [0 0];
+h = [0 0];
+figure('Position', [540 560 700 420])
+hold on
+% (1) laser has no significant impact on response modulation (large dots) (small dots)
+ind = ~signLaser & validUnits;
+n(1) = sum(ind);
+h(1) = plot(diffOff(ind), diffOn(ind), 'o', 'MarkerSize', 7, ...
+    'MarkerEdgeColor', 'none', 'MarkerFaceColor', [1 1 1] .* .5);
+% (2) laser has significant impact on response modulation (large dots)
+ind = signLaser & validUnits;
+n(2) = sum(ind);
+h(2) = plot(diffOff(ind), diffOn(ind), 'o', 'MarkerSize', 7, ...
+    'MarkerEdgeColor', 'none', 'MarkerFaceColor', 'k');
+exID = strcmp(subjects, exampleEphys{1}) & strcmp(dates, exampleEphys{2}) & ...
+    ids==exampleEphys{3};
+plot(diffOff(exID), diffOn(exID), 'o', ...
+    'MarkerSize', 5, 'MarkerEdgeColor', 'none', 'MarkerFaceColor', 'r')
+    
+plot([-200 200], [-200 200], 'k:', 'LineWidth', 1)
+legend(h, ['p_{laser} \geq 0.05 (n=' num2str(n(1)) ')'], ...
+    ['p_{laser} < 0.05 (n=' num2str(n(2)) ')'], ...
+    'Location', 'northeastoutside')
+axis([-1 1 -1 1].*200)
+axis square
+xlabel(sprintf('Response modulation (%%)\ncontrol'))
+ylabel(sprintf('Response modulation (%%)\nV1 inactivation'))
+title(sprintf('n = %d', sum(n)))
+set(gca, 'box', 'off', 'XTick', [-200 0 200], 'YTick', [-200 0 200])
