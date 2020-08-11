@@ -883,13 +883,10 @@ numSh = 200;
 subjects = {};
 dates = {};
 ids = [];
-minima = [];
 maxima = [];
 means = [];
-nullBehMinima = [];
 nullBehMaxima = [];
 nullBehMeans = [];
-nullLaserMinima = [];
 nullLaserMaxima = [];
 nullLaserMeans = [];
 isSuppr = [];
@@ -949,13 +946,10 @@ for subj = 1:length(subjDirs)
         isSuppr = [isSuppr; readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
             date, '001\_ss_tuning.isSuppressed.npy'))];
         
-        mi = NaN(n,4);
         ma = NaN(n,4);
         mn = NaN(n,4);
-        nbmi = NaN(n,4,numSh);
         nbma = NaN(n,4,numSh);
         nbmn = NaN(n,4,numSh);
-        nlmi = NaN(n,4,numSh);
         nlma = NaN(n,4,numSh);
         nlmn = NaN(n,4,numSh);
         for iCell = 1:n
@@ -966,12 +960,6 @@ for subj = 1:length(subjDirs)
                     oris = mod(pd + [0 90 180], 360);
                     resp = gratings.orituneWrappedConditions(pars(iCell,:,cond), oris);
                     ma(iCell,cond) = resp(1);
-                    if resp(1)-resp(2) < 0 % suppressed by gratings
-                        [mi(iCell,cond),ind] = max(resp(2:3));
-                    else
-                        [mi(iCell,cond),ind] = min(resp(2:3));
-                    end
-                    ind = ind + 1;
                     
                     respB = NaN(numSh, 3);
                     crvB = NaN(numSh, 360);
@@ -989,10 +977,8 @@ for subj = 1:length(subjDirs)
                         crvL(sh,:) = gratings.orituneWrappedConditions(...
                             nlPars(iCell,:,sh,cond), 1:360);
                     end
-                    nbmi(iCell,cond,:) = respB(:,ind);
                     nbma(iCell,cond,:) = respB(:,1);
                     nbmn(iCell,cond,:) = mean(crvB,2);
-                    nlmi(iCell,cond,:) = respL(:,ind);
                     nlma(iCell,cond,:) = respL(:,1);
                     nlmn(iCell,cond,:) = mean(crvL,2);
                 else
@@ -1002,13 +988,10 @@ for subj = 1:length(subjDirs)
                 end
             end
         end
-        minima = [minima; mi];
         maxima = [maxima; ma];
         means = [means; mn];
-        nullBehMinima = [nullBehMinima; nbmi];
         nullBehMaxima = [nullBehMaxima; nbma];
         nullBehMeans = [nullBehMeans; nbmn];
-        nullLaserMinima = [nullLaserMinima; nlmi];
         nullLaserMaxima = [nullLaserMaxima; nlma];
         nullLaserMeans = [nullLaserMeans; nlmn];
     end
@@ -1064,11 +1047,12 @@ signLaser = diffs < confIntLaser(:,1) | diffs > confIntLaser(:,2);
 %% Figure 4J (ephys: response modulation histograms)
 binSizes = 20;
 bins = -200 : binSizes : 200;
+edges = [bins bins(end)+binSizes] - binSizes/2;
 
 % histogram for laser off condition
 figure
-n1 = hist(diffOff(signBehOff & validUnits), bins);
-n2 = hist(diffOff(~signBehOff & validUnits), bins);
+n1 = histcounts(diffOff(signBehOff & validUnits), edges);
+n2 = histcounts(diffOff(~signBehOff & validUnits), edges);
 b = bar(bins, [n1',n2'], 'stacked');
 b(1).FaceColor = 'k';
 b(2).FaceColor = 'w';
@@ -1081,8 +1065,8 @@ set(gca, 'box', 'off', 'XTick', [-200 0 200])
 
 % histogram for laser on condition
 figure
-n1 = hist(diffOn(signBehOn & validUnits), bins);
-n2 = hist(diffOn(~signBehOn & validUnits), bins);
+n1 = histcounts(diffOn(signBehOn & validUnits), edges);
+n2 = histcounts(diffOn(~signBehOn & validUnits), edges);
 b = bar(bins, [n1',n2'], 'stacked');
 b(1).FaceColor = 'k';
 b(2).FaceColor = 'w';

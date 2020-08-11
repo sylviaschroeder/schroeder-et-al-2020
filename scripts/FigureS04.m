@@ -38,9 +38,15 @@ examplesTun = {'SS038', '2015-02-17', 1, 127; ...
             'SS041', '2015-04-23', 2, 151; ...
             'SS038', '2015-02-17', 1, 203};
 
+examplesEphys = {'SS072', '2016-12-04', 2; ...
+            'SS072', '2016-12-04', 63; ...
+            'SS072', '2016-12-04', 28; ...
+            'SS072', '2016-12-04', 73};
+
 %% Add paths
 addpath(genpath(fullfile(folderTools, 'npy-matlab')))
 addpath(genpath(fullfile(folderTools, 'CircStat2012a')))
+addpath(genpath(fullfile(folderTools, 'spikes')))
 addpath(fullfile(folderThisRepo))
 
 %% Figure S4A (receptive fields of example neurons)
@@ -1145,4 +1151,321 @@ for m = 1:4
             end
         end
     end
+end
+
+%% Figure S4W (ephys in V1: rasters)
+binSize = 0.01;
+prePostStim = 0.2;
+
+ids = readmatrix(fullfile(folderBase, 'v1 neurons ephys', examplesEphys{1,1}, ...
+    examplesEphys{1,2}, '001\clusters.uuids.csv'));
+st = readNPY(fullfile(folderBase, 'v1 neurons ephys', examplesEphys{1,1}, ...
+    examplesEphys{1,2}, '001\spike.times.npy'));
+clusters = readNPY(fullfile(folderBase, 'v1 neurons ephys', examplesEphys{1,1}, ...
+    examplesEphys{1,2}, '001\spike.clusters.npy'));
+stimTimes = readNPY(fullfile(folderBase, 'v1 neurons ephys', examplesEphys{1,1}, ...
+    examplesEphys{1,2}, '001\_ss_grating.intervals.npy'));
+stimSequence = readNPY(fullfile(folderBase, 'v1 neurons ephys', examplesEphys{1,1}, ...
+    examplesEphys{1,2}, '001\_ss_grating._ss_gratingID.npy'));
+directions = readNPY(fullfile(folderBase, 'v1 neurons ephys', examplesEphys{1,1}, ...
+    examplesEphys{1,2}, '001\_ss_gratingID.directions.npy'));
+laserOn = readNPY(fullfile(folderBase, 'v1 neurons ephys', examplesEphys{1,1}, ...
+    examplesEphys{1,2}, '001\_ss_gratingID.laserOn.npy'));
+laserOnTimes = readNPY(fullfile(folderBase, 'v1 neurons ephys', examplesEphys{1,1}, ...
+    examplesEphys{1,2}, '001\_ss_gratingID.laserOnTime.npy'));
+laserOffTimes = readNPY(fullfile(folderBase, 'v1 neurons ephys', examplesEphys{1,1}, ...
+    examplesEphys{1,2}, '001\_ss_gratingID.laserOffTime.npy'));
+
+stimDur = mean(diff(stimTimes,1,2));
+window = [-prePostStim stimDur+prePostStim];
+edges = window(1) : binSize : window(2);
+bins = edges(1:end-1) + binSize/2;
+binsOn = bins>0 & bins<stimDur;
+
+for ex = 1:size(examplesEphys,1)
+    resp = NaN(length(directions), sum(stimSequence==1), length(bins));
+    s = st(clusters == ids(examplesEphys{ex,3}));
+    for stim = 1:length(directions)
+        stimInd = find(stimSequence == stim);
+        binnedArray = timestampsToBinned(s, stimTimes(stimInd,1), binSize, window);
+        resp(stim,:,:) = binnedArray ./ binSize;
+    end
+    
+    psths = squeeze(mean(resp, 2));
+    maxi = max(psths(:));
+    figure
+    subplot(2,1,1)
+    imagesc(bins([1 end]), [1 length(directions)/2], ...
+        psths(size(psths,1)/2+1:end,:),[0 maxi])
+    ylim([0.5 12.5])
+    title(sprintf('V1 neuron %d', ex))
+    ylabel('laser off')
+    colorbar
+    subplot(2,1,2)
+    imagesc(bins([1 end]), [1 length(directions)/2], ...
+        psths(1:size(psths,1)/2,:),[0 maxi])
+    rectangle('Position', [laserOnTimes(1)-2*binSize 1.1 ...
+        -laserOnTimes(1)+stimDur+0.5*laserOffTimes(1)-2*binSize .8], 'EdgeColor', 'none', ...
+        'FaceColor', 'c')
+    ylim([0.5 12.5])
+    xlabel('Time from stimulus onset')
+    ylabel('laser on')
+    colorbar
+    colormap(grayMap)
+end
+
+%% Figure S4X (ephys in V1: scatter of inactivation vs depth)
+layerBorders = [.12, .33, .47, .73];
+subjects = {};
+dates = {};
+ids = [];
+maxResponses = [];
+laserActivation = [];
+depthsNorm = [];
+
+subjDirs = dir(fullfile(folderBase, 'v1 neurons ephys'));
+for subj = 1:length(subjDirs)
+    name = subjDirs(subj).name;
+    if ~subjDirs(subj).isdir || any(strcmp(name, {'.','..'}))
+        continue
+    end
+    dateDirs = dir(fullfile(folderBase, 'v1 neurons ephys', name, '2*'));
+    for dt = 1:length(dateDirs)
+        date = dateDirs(dt).name;
+        c = readmatrix(fullfile(folderBase, 'v1 neurons ephys', name, ...
+            date, '001\clusters.uuids.csv'));
+        n = length(c);
+        ids = [ids; c];
+        subjects = [subjects; repmat({name}, n, 1)];
+        dates = [dates; repmat({date}, n, 1)];
+        
+        st = readNPY(fullfile(folderBase, 'v1 neurons ephys', name, ...
+            date, '001\spike.times.npy'));
+        clusters = readNPY(fullfile(folderBase, 'v1 neurons ephys', name, ...
+            date, '001\spike.clusters.npy'));
+        spikeDepths = readNPY(fullfile(folderBase, 'v1 neurons ephys', name, ...
+            date, '001\spike.depths.npy'));
+        stimTimes = readNPY(fullfile(folderBase, 'v1 neurons ephys', name, ...
+            date, '001\_ss_grating.intervals.npy'));
+        stimSequence = readNPY(fullfile(folderBase, 'v1 neurons ephys', name, ...
+            date, '001\_ss_grating._ss_gratingID.npy'));
+        directions = readNPY(fullfile(folderBase, 'v1 neurons ephys', name, ...
+            date, '001\_ss_gratingID.directions.npy'));
+        laserOn = readNPY(fullfile(folderBase, 'v1 neurons ephys', name, ...
+            date, '001\_ss_gratingID.laserOn.npy'));
+        v1Depth = readNPY(fullfile(folderBase, 'v1 neurons ephys', name, ...
+            date, '001\probe.v1Depth.npy'));
+        
+        stimDur = mean(diff(stimTimes,1,2));
+        window = [0 stimDur];
+        binSize = stimDur;
+        
+        mx = NaN(n,1);
+        lasActs = NaN(n,1);
+        dpth = NaN(n,1);
+        for iCell = 1:n
+            resp = NaN(length(directions),1);
+            sInds = clusters == c(iCell);
+            s = st(sInds);
+            for stim = 1:length(directions)
+                stimInd = find(stimSequence == stim);
+                binnedArray = timestampsToBinned(s, stimTimes(stimInd,1), binSize, window);
+                resp(stim) = nanmean(binnedArray ./ binSize);
+            end
+            resp = [resp(~isnan(directions)&~laserOn) resp(~isnan(directions)&laserOn)];
+            [mx(iCell), prefInd] = max(resp(:,1));
+            lasActs(iCell) = resp(prefInd,2) / resp(prefInd,1);
+            
+            d = mean(spikeDepths(sInds));
+            dpth(iCell) = (v1Depth(2)-d) ./ diff(v1Depth);
+        end
+        maxResponses = [maxResponses; mx];
+        laserActivation = [laserActivation; lasActs];
+        depthsNorm = [depthsNorm; dpth];
+    end
+end
+laserActivation(laserActivation>2) = 2;
+
+cols = lines(4);
+ind = maxResponses > 2;
+figure
+grayMap = colormap('gray');
+grayMap = flip(grayMap);
+hold on
+fill([0 2 2 0]', ...
+    reshape([1;1]*[0 layerBorders(1) layerBorders(2:3) ...
+    layerBorders(4) 1], 4, []), 'k', ...
+    'FaceColor', [1 1 1].*0.9, 'EdgeColor', 'none')
+fill([0 2 2 0]', ...
+    reshape([1;1]*[layerBorders(1:2) layerBorders(3:4)], 4, []), 'k', ...
+    'FaceColor', [1 1 1].*0.7, 'EdgeColor', 'none')
+scatter(laserActivation(ind), depthsNorm(ind), [], 'k', 'filled', ...
+    'MarkerFaceAlpha', 0.5)
+plot([1 1],[0 1],'k')
+for ex = 1:size(examplesEphys,1)
+    k = find(strcmp(subjects, examplesEphys{ex,1}) & ...
+        strcmp(dates, examplesEphys{ex,2}));
+    k = k(examplesEphys{ex,3});
+    plot(laserActivation(k), depthsNorm(k), 'o', ...
+        'MarkerFaceColor', cols(ex,:), 'MarkerEdgeColor', 'none')
+end
+set(gca,'XTick', [0 1 2], 'XTickLabel',{'0' '1' '\geq2'})
+set(gca, 'YDir', 'reverse', 'YTick', mean([0 layerBorders; layerBorders 1],1), ...
+    'YTickLabel', {'L1','L2/3','L4','L5','L6'})
+xlabel('Maximum(laser on) / Maximum(laser off)')
+title(sprintf('n = %d', sum(ind)))
+
+%% Figure S4Y+Z (ephys in SC: scatters of max responses during control and V1 inactivation)
+numSh = 200;
+minima = [];
+maxima = [];
+means = [];
+nullLaserMinima = [];
+nullLaserMaxima = [];
+nullLaserMeans = [];
+isSuppr = [];
+
+subjDirs = dir(fullfile(folderBase, 'sc neurons ephys'));
+for subj = 1:length(subjDirs)
+    name = subjDirs(subj).name;
+    if ~subjDirs(subj).isdir || any(strcmp(name, {'.','..'}))
+        continue
+    end
+    dateDirs = dir(fullfile(folderBase, 'sc neurons ephys', name, '2*'));
+    for dt = 1:length(dateDirs)
+        date = dateDirs(dt).name;
+        c = readmatrix(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\clusters.uuids.csv'));
+        n = length(c);
+        
+        parsSOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.parametersSmallLaserOff.npy'));
+        parsLOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.parametersLargeLaserOff.npy'));
+        parsSOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.parametersSmallLaserOn.npy'));
+        parsLOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.parametersLargeLaserOn.npy'));
+        pars = cat(3, parsSOff, parsLOff, parsSOn, parsLOn);
+        cSOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.curvesSmallLaserOff.npy'));
+        cLOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.curvesLargeLaserOff.npy'));
+        cSOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.curvesSmallLaserOn.npy'));
+        cLOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.curvesLargeLaserOn.npy'));
+        curves = cat(3, cSOff, cLOff, cSOn, cLOn);
+        nbSOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullBehaviourParametersSmallLaserOff.npy'));
+        nbLOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullBehaviourParametersLargeLaserOff.npy'));
+        nbSOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullBehaviourParametersSmallLaserOn.npy'));
+        nbLOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullBehaviourParametersLargeLaserOn.npy'));
+        nbPars = cat(4, nbSOff, nbLOff, nbSOn, nbLOn);
+        nlSOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullLaserParametersSmallLaserOff.npy'));
+        nlLOff = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullLaserParametersLargeLaserOff.npy'));
+        nlSOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullLaserParametersSmallLaserOn.npy'));
+        nlLOn = readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.nullLaserParametersLargeLaserOn.npy'));
+        nlPars = cat(4, nlSOff, nlLOff, nlSOn, nlLOn);
+        isSuppr = [isSuppr; readNPY(fullfile(folderBase, 'sc neurons ephys', name, ...
+            date, '001\_ss_tuning.isSuppressed.npy'))];
+        
+        mi = NaN(n,4);
+        ma = NaN(n,4);
+        mn = NaN(n,4);
+        nlmi = NaN(n,4,numSh);
+        nlma = NaN(n,4,numSh);
+        nlmn = NaN(n,4,numSh);
+        for iCell = 1:n
+            for cond = 1:4
+                if ~isnan(pars(iCell,2,cond)) % tuned
+                    pd = pars(iCell,1,cond);
+                    mn(iCell,cond) = mean(curves(iCell,:,cond));
+                    oris = mod(pd + [0 90 180], 360);
+                    resp = gratings.orituneWrappedConditions(pars(iCell,:,cond), oris);
+                    ma(iCell,cond) = resp(1);
+                    if resp(1)-resp(2) < 0 % suppressed by gratings
+                        [mi(iCell,cond),ind] = max(resp(2:3));
+                    else
+                        [mi(iCell,cond),ind] = min(resp(2:3));
+                    end
+                    ind = ind + 1;
+                    
+                    respL = NaN(numSh, 3);
+                    crvL = NaN(numSh, 360);
+                    for sh = 1:numSh
+                        oris = mod(nlPars(iCell,1,sh,cond) + [0 90 180], 360);
+                        respL(sh,:) = gratings.orituneWrappedConditions( ...
+                            nlPars(iCell,:,sh,cond), oris);
+                        crvL(sh,:) = gratings.orituneWrappedConditions(...
+                            nlPars(iCell,:,sh,cond), 1:360);
+                    end
+                    nlmi(iCell,cond,:) = respL(:,ind);
+                    nlma(iCell,cond,:) = respL(:,1);
+                    nlmn(iCell,cond,:) = mean(crvL,2);
+                else
+                    mn(iCell,cond) = pars(iCell,1,cond);
+                    nlmn(iCell,cond,:) = nlPars(iCell,1,:,cond);
+                end
+            end
+        end
+        minima = [minima; mi];
+        maxima = [maxima; ma];
+        means = [means; mn];
+        nullLaserMinima = [nullLaserMinima; nlmi];
+        nullLaserMaxima = [nullLaserMaxima; nlma];
+        nullLaserMeans = [nullLaserMeans; nlmn];
+    end
+end
+
+% for untuned neurons, set maxima to mean responses, for tuned and
+% suppressed neurons set maxima to minima ("maxima" contains the responses
+% to the preferred stimulus; for suppressed neurons this is smallest of all
+% responses; here we are interested in the biggest responses)
+isTuned = ~isnan(maxima(:,1));
+maxima(~isTuned,:) = means(~isTuned,:);
+nullLaserMaxima(~isTuned,:,:) = nullLaserMeans(~isTuned,:,:);
+maxima(isTuned & isSuppr==1,:) = minima(isTuned & isSuppr==1,:);
+nullLaserMaxima(isTuned & isSuppr==1,:,:) = nullLaserMinima(isTuned & isSuppr==1,:,:);
+
+modFun = @(a,b) (b-a)./((abs(a)+abs(b)) ./ 2) .* 100;
+% response modulation during control and V1 inactivation
+diffOff = modFun(maxima(:,1), maxima(:,2));
+diffOn = modFun(maxima(:,3), maxima(:,4));
+diffs = [diffOff, diffOn];
+validUnits = ~any(isnan(diffs),2);
+
+cols = [0 0 0; 1 0 0];
+ttls = {'Small pupil','Large pupil'};
+mini = 0;
+maxi = 102;
+for c = 1:2
+    mods = modFun(maxima(:,c), maxima(:,c+2));
+    pseudoDiffsLaser = modFun(squeeze(nullLaserMaxima(:,c,:)), ...
+        squeeze(nullLaserMaxima(:,c+2,:)));
+    confInt = prctile(pseudoDiffsLaser, [2.5 97.5], 2);
+    sgnf = mods<confInt(:,1) | mods>confInt(:,2);
+    h = [0 0];
+    figure
+    hold on
+    h(1) = plot(maxima(validUnits & ~sgnf,c), maxima(validUnits & ~sgnf,c+2), ...
+        'o','MarkerEdgeColor','none','MarkerFaceColor',cols(c,:).*0.2+[1 1 1].*0.8);
+    h(2) = plot(maxima(validUnits & sgnf,c), maxima(validUnits & sgnf,c+2), ...
+        'o','MarkerEdgeColor','none','MarkerFaceColor',cols(c,:));
+    plot([mini maxi],[mini maxi],'k:', 'LineWidth', 1)
+    axis image
+    set(gca,'box','off')
+    xlabel(sprintf('Maximum (spikes/s)\n(control)'))
+    ylabel(sprintf('Maximum (spikes/s)\n(V1 inactivated)'))
+    p = signrank(diffs(validUnits,c));
+    title(sprintf('%s: Max. modulation = %.2f%% (p = %.2e, n = %d)', ...
+        ttls{c}, nanmean(diffs(validUnits,c)), p, sum(validUnits)))
+    legend(h,{'p \geq 0.05','p < 0.05'},'Location','NorthWest')
 end
