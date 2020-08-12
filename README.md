@@ -11,7 +11,7 @@
 * [Spikes](https://github.com/cortex-lab/spikes)
 
 ## Description
-See Wiki
+See [Wiki](https://github.com/sylviaschroeder/schroeder-et-al-2020/wiki)
 
 ## Acknowledgments
 Some functions, particularly those for fitting the tuning curves, were written by Matteo Carandini and other members of the lab. Details in the comments of those functions.
