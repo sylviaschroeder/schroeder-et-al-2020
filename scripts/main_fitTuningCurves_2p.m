@@ -64,10 +64,7 @@ for iPars = length(parameterSets):-1:1 % results from parameterSets
             end
             
             % load data
-            traces = readNPY(fullfile(folder, '_ss_2pCalcium.dff.npy'));
             time = readNPY(fullfile(folder, '_ss_2pCalcium.timestamps.npy'));
-            delays = readNPY(fullfile(folder, '_ss_2pPlanes.delay.npy'));
-            planes = readNPY(fullfile(folder, '_ss_2pRois._ss_2pPlanes.npy'));
             kernels = readNPY(fullfile(folder, '_ss_2pRois._ss_gratingsKernels.npy'));
             isGad = readNPY(fullfile(folder, '_ss_2pRois.isGad.npy'));
             pupilSize = readNPY(fullfile(folder, 'eye.diameter.npy'));
