@@ -16,13 +16,10 @@ correctWin = 150; % in s, window to fit exponential
 % for receptive field estimates
 % used for fitting 2 RFs (ON and OFF simultaneously), and fitting running
 % kernels and RFs simultaneously
-% lambdasStim = logspace(-4, 1, 6);
-% lambdasRun = logspace(0, 6, 7);
-lambdasStim = logspace(-4, -3, 2);
-lambdasRun = logspace(0, 1, 2);
+lambdasStim = logspace(-4, 1, 6);
+lambdasRun = logspace(0, 6, 7);
 RFlimits = [0.2 0.4];
-% crossFolds = 10;
-crossFolds = 4;
+crossFolds = 10;
 
 % parameters for running speed as predictor
 runKrnlLimits = [-5 5];
